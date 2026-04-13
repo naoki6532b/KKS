@@ -50,22 +50,30 @@ export default async function HomePage() {
   const remaining = budget - expenseTotal;
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
+    <main style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "flex-start",
           gap: 12,
-          marginBottom: 24,
+          marginBottom: 20,
+          flexWrap: "wrap",
         }}
       >
         <div>
-          <h1 style={{ margin: 0 }}>Money Manager</h1>
-          <div>{currentMonth}</div>
+          <h1 style={{ margin: 0, fontSize: "clamp(24px, 5vw, 32px)" }}>Money Manager</h1>
+          <div style={{ marginTop: 4, color: "#666", fontSize: 14 }}>{currentMonth}</div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           <Link href="/budgets">月度予算</Link>
           <Link href="/transactions/new">出入金入力</Link>
           <Link href="/masters">マスタ管理</Link>
@@ -78,34 +86,101 @@ export default async function HomePage() {
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0,1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
           gap: 12,
-          marginBottom: 24,
+          marginBottom: 20,
         }}
       >
-        <div style={{ background: "#fff", padding: 16, borderRadius: 12 }}>
-          <div>当月予算</div>
-          <strong style={{ fontSize: 24 }}>{budget.toLocaleString()} 円</strong>
+        <div
+          style={{
+            background: "#fff",
+            padding: 14,
+            borderRadius: 12,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>当月予算</div>
+          <strong
+            style={{
+              display: "block",
+              fontSize: "clamp(20px, 5vw, 28px)",
+              lineHeight: 1.2,
+              wordBreak: "break-all",
+            }}
+          >
+            {budget.toLocaleString()} 円
+          </strong>
         </div>
-        <div style={{ background: "#fff", padding: 16, borderRadius: 12 }}>
-          <div>当月収入</div>
-          <strong style={{ fontSize: 24 }}>{incomeTotal.toLocaleString()} 円</strong>
+
+        <div
+          style={{
+            background: "#fff",
+            padding: 14,
+            borderRadius: 12,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>当月収入</div>
+          <strong
+            style={{
+              display: "block",
+              fontSize: "clamp(20px, 5vw, 28px)",
+              lineHeight: 1.2,
+              wordBreak: "break-all",
+            }}
+          >
+            {incomeTotal.toLocaleString()} 円
+          </strong>
         </div>
-        <div style={{ background: "#fff", padding: 16, borderRadius: 12 }}>
-          <div>当月支出</div>
-          <strong style={{ fontSize: 24 }}>{expenseTotal.toLocaleString()} 円</strong>
+
+        <div
+          style={{
+            background: "#fff",
+            padding: 14,
+            borderRadius: 12,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>当月支出</div>
+          <strong
+            style={{
+              display: "block",
+              fontSize: "clamp(20px, 5vw, 28px)",
+              lineHeight: 1.2,
+              wordBreak: "break-all",
+            }}
+          >
+            {expenseTotal.toLocaleString()} 円
+          </strong>
         </div>
-        <div style={{ background: "#fff", padding: 16, borderRadius: 12 }}>
-          <div>あと使える額</div>
-          <strong style={{ fontSize: 24 }}>{remaining.toLocaleString()} 円</strong>
+
+        <div
+          style={{
+            background: "#fff",
+            padding: 14,
+            borderRadius: 12,
+            minWidth: 0,
+          }}
+        >
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>あと使える額</div>
+          <strong
+            style={{
+              display: "block",
+              fontSize: "clamp(20px, 5vw, 28px)",
+              lineHeight: 1.2,
+              wordBreak: "break-all",
+            }}
+          >
+            {remaining.toLocaleString()} 円
+          </strong>
         </div>
       </section>
 
       <section style={{ background: "#fff", padding: 16, borderRadius: 12 }}>
-        <h2>今後のカード引落予定</h2>
+        <h2 style={{ marginTop: 0, fontSize: "clamp(18px, 4.5vw, 24px)" }}>今後のカード引落予定</h2>
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           {(dueRows ?? []).map((row) => (
-            <li key={row.id}>
+            <li key={row.id} style={{ marginBottom: 6, lineHeight: 1.5, wordBreak: "break-word" }}>
               {row.card_due_date} / {(row.accounts as { name?: string } | null)?.name ?? "-"} /{" "}
               {(row.counterparties as { name?: string } | null)?.name ?? "-"} /{" "}
               {row.amount.toLocaleString()} 円
