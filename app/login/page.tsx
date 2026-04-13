@@ -1,6 +1,85 @@
-import { signInAction, signUpAction } from "./actions";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
+
+  const [loading, setLoading] = useState<"login" | "signup" | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
+
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErrorMessage("");
+    setInfoMessage("");
+    setLoading("login");
+
+    try {
+      const supabase = createClient();
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      setErrorMessage("ログイン処理でエラーが発生しました。");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleSignUp(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErrorMessage("");
+    setInfoMessage("");
+    setLoading("signup");
+
+    try {
+      const supabase = createClient();
+
+      const { data, error } = await supabase.auth.signUp({
+        email: signUpEmail.trim(),
+        password: signUpPassword,
+      });
+
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+
+      if (data.session) {
+        router.push("/");
+        router.refresh();
+        return;
+      }
+
+      setInfoMessage(
+        "新規登録を受け付けました。確認メールが送られる設定の場合は、メールをご確認ください。"
+      );
+    } catch (err) {
+      setErrorMessage("新規登録処理でエラーが発生しました。");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <main
       style={{
@@ -22,12 +101,44 @@ export default function LoginPage() {
       >
         <h1 style={{ marginTop: 0 }}>Money Manager</h1>
 
-        <form action={signInAction} style={{ display: "grid", gap: 12 }}>
+        {errorMessage ? (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              borderRadius: 8,
+              background: "#ffe8e8",
+              color: "#b00020",
+              fontSize: 14,
+            }}
+          >
+            {errorMessage}
+          </div>
+        ) : null}
+
+        {infoMessage ? (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              borderRadius: 8,
+              background: "#e8f4ff",
+              color: "#0b57a4",
+              fontSize: 14,
+            }}
+          >
+            {infoMessage}
+          </div>
+        ) : null}
+
+        <form onSubmit={handleLogin} style={{ display: "grid", gap: 12 }}>
           <input
             name="email"
             type="email"
             placeholder="メールアドレス"
             required
+            value={loginEmail}
+            onChange={(e) => setLoginEmail(e.target.value)}
             style={{ padding: 12, fontSize: 16 }}
           />
           <input
@@ -35,32 +146,46 @@ export default function LoginPage() {
             type="password"
             placeholder="パスワード"
             required
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
             style={{ padding: 12, fontSize: 16 }}
           />
-          <button type="submit" style={{ padding: 12, fontSize: 16 }}>
-            ログイン
+          <button
+            type="submit"
+            disabled={loading !== null}
+            style={{ padding: 12, fontSize: 16 }}
+          >
+            {loading === "login" ? "ログイン中..." : "ログイン"}
           </button>
         </form>
 
         <hr style={{ margin: "20px 0" }} />
 
-        <form action={signUpAction} style={{ display: "grid", gap: 12 }}>
+        <form onSubmit={handleSignUp} style={{ display: "grid", gap: 12 }}>
           <input
-            name="email"
+            name="signup_email"
             type="email"
             placeholder="新規登録用メールアドレス"
             required
+            value={signUpEmail}
+            onChange={(e) => setSignUpEmail(e.target.value)}
             style={{ padding: 12, fontSize: 16 }}
           />
           <input
-            name="password"
+            name="signup_password"
             type="password"
             placeholder="新規登録用パスワード"
             required
+            value={signUpPassword}
+            onChange={(e) => setSignUpPassword(e.target.value)}
             style={{ padding: 12, fontSize: 16 }}
           />
-          <button type="submit" style={{ padding: 12, fontSize: 16 }}>
-            新規登録
+          <button
+            type="submit"
+            disabled={loading !== null}
+            style={{ padding: 12, fontSize: 16 }}
+          >
+            {loading === "signup" ? "登録中..." : "新規登録"}
           </button>
         </form>
       </div>

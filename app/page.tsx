@@ -19,29 +19,28 @@ export default async function HomePage() {
   const monthEnd = nextMonthStart(monthStart);
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: budgetRow }, { data: txRows }, { data: dueRows }] =
-    await Promise.all([
-      supabase
-        .from("monthly_budgets")
-        .select("budget_amount")
-        .eq("target_month", monthStart)
-        .maybeSingle(),
+  const [{ data: budgetRow }, { data: txRows }, { data: dueRows }] = await Promise.all([
+    supabase
+      .from("monthly_budgets")
+      .select("budget_amount")
+      .eq("target_month", monthStart)
+      .maybeSingle(),
 
-      supabase
-        .from("transactions")
-        .select("amount, tx_type")
-        .gte("tx_date", monthStart)
-        .lt("tx_date", monthEnd)
-        .order("tx_date", { ascending: false }),
+    supabase
+      .from("transactions")
+      .select("amount, tx_type")
+      .gte("tx_date", monthStart)
+      .lt("tx_date", monthEnd)
+      .order("tx_date", { ascending: false }),
 
-      supabase
-        .from("transactions")
-        .select("id, tx_date, amount, card_due_date, counterparties(name), accounts(name)")
-        .not("card_due_date", "is", null)
-        .gte("card_due_date", today)
-        .order("card_due_date", { ascending: true })
-        .limit(10),
-    ]);
+    supabase
+      .from("transactions")
+      .select("id, tx_date, amount, card_due_date, counterparties(name), accounts(name)")
+      .not("card_due_date", "is", null)
+      .gte("card_due_date", today)
+      .order("card_due_date", { ascending: true })
+      .limit(10),
+  ]);
 
   const budget = budgetRow?.budget_amount ?? 0;
   const incomeTotal =
@@ -66,9 +65,10 @@ export default async function HomePage() {
           <div>{currentMonth}</div>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/budgets">月度予算</Link>
           <Link href="/transactions/new">出入金入力</Link>
+          <Link href="/masters">マスタ管理</Link>
           <form action="/logout" method="post">
             <button type="submit">ログアウト</button>
           </form>
@@ -116,4 +116,4 @@ export default async function HomePage() {
       </section>
     </main>
   );
-}                                                                           
+}
