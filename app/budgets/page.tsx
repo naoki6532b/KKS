@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { navButtonStyle } from "@/lib/navButtonStyle";
 
 type BudgetRow = {
   budget_amount: number;
@@ -146,8 +147,16 @@ export default function BudgetsPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-      <div style={{ marginBottom: 16 }}>
-        <Link href="/">← 戻る</Link>
+      <div style={{ marginBottom: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Link href="/" style={navButtonStyle}>
+          ホームへ戻る
+        </Link>
+        <Link href="/transactions/new" style={navButtonStyle}>
+          出入金入力
+        </Link>
+        <Link href="/masters" style={navButtonStyle}>
+          マスタ管理
+        </Link>
       </div>
 
       <div style={{ background: "#fff", padding: 24, borderRadius: 12 }}>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { navButtonStyle } from "@/lib/navButtonStyle";
 
 type MasterTab = "categories" | "counterparties" | "accounts";
 
@@ -486,15 +487,22 @@ export default function MastersPage() {
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>マスタ管理</h1>
-          <div style={{ color: "#666", marginTop: 4 }}>科目・相手先・支払方法をまとめて管理します</div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Link href="/">ホーム</Link>
-          <Link href="/transactions/new">出入金入力</Link>
-        </div>
-      </div>
+  <div>
+    <h1 style={{ margin: 0 }}>マスタ管理</h1>
+    <div style={{ color: "#666", marginTop: 4 }}>科目・相手先・支払方法をまとめて管理します</div>
+  </div>
+  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <Link href="/" style={navButtonStyle}>
+      ホーム
+    </Link>
+    <Link href="/budgets" style={navButtonStyle}>
+      月度予算
+    </Link>
+    <Link href="/transactions/new" style={navButtonStyle}>
+      出入金入力
+    </Link>
+  </div>
+</div>
 
       {errorMessage ? (
         <div

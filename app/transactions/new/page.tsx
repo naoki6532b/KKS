@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeCardDueDate, firstDayOfMonth, type AccountRule } from "@/lib/money";
+import { navButtonStyle } from "@/lib/navButtonStyle";
 
 type CategoryRow = {
   id: string;
@@ -231,11 +232,19 @@ export default function NewTransactionPage() {
           marginBottom: 16,
           display: "flex",
           justifyContent: "space-between",
-          gap: 12,
+          gap: 8,
+          flexWrap: "wrap",
         }}
       >
-        <Link href="/">← 戻る</Link>
-        <Link href="/masters">マスタ管理</Link>
+        <Link href="/" style={navButtonStyle}>
+          ホームへ戻る
+        </Link>
+        <Link href="/budgets" style={navButtonStyle}>
+          月度予算
+        </Link>
+        <Link href="/masters" style={navButtonStyle}>
+          マスタ管理
+        </Link>
       </div>
 
       <div style={{ background: "#fff", padding: 24, borderRadius: 12 }}>

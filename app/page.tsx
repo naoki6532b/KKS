@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { nextMonthStart } from "@/lib/money";
+import { navButtonStyle, dangerButtonStyle } from "@/lib/navButtonStyle";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -74,11 +75,19 @@ export default async function HomePage() {
             alignItems: "center",
           }}
         >
-          <Link href="/budgets">月度予算</Link>
-          <Link href="/transactions/new">出入金入力</Link>
-          <Link href="/masters">マスタ管理</Link>
+          <Link href="/budgets" style={navButtonStyle}>
+            月度予算
+          </Link>
+          <Link href="/transactions/new" style={navButtonStyle}>
+            出入金入力
+          </Link>
+          <Link href="/masters" style={navButtonStyle}>
+            マスタ管理
+          </Link>
           <form action="/logout" method="post">
-            <button type="submit">ログアウト</button>
+            <button type="submit" style={dangerButtonStyle}>
+              ログアウト
+            </button>
           </form>
         </div>
       </div>
@@ -191,4 +200,4 @@ export default async function HomePage() {
       </section>
     </main>
   );
-}
+}                                                                         
