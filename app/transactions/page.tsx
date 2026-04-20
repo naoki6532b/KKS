@@ -11,7 +11,7 @@ export default async function TransactionsPage() {
 
   const { data: rows, error } = await supabase
     .from("transactions")
-    .select("id, tx_date, tx_type, amount, memo, categories(name), counterparties(name), accounts(name)")
+    .select("id, tx_date, tx_type, amount, item_name, memo, categories(name), counterparties(name), accounts(name)")
     .order("tx_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(200);
@@ -42,6 +42,7 @@ export default async function TransactionsPage() {
                     <th style={{ textAlign: "right" }}>金額</th>
                     <th>科目</th>
                     <th>相手先</th>
+                    <th>品名 / 名称</th>
                     <th>口座</th>
                     <th>メモ</th>
                     <th></th>
@@ -63,6 +64,9 @@ export default async function TransactionsPage() {
                       </td>
                       <td>{(row.categories as { name?: string } | null)?.name ?? "—"}</td>
                       <td>{(row.counterparties as { name?: string } | null)?.name ?? "—"}</td>
+                      <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
+                        {(row as { item_name?: string | null }).item_name ?? ""}
+                      </td>
                       <td>{(row.accounts as { name?: string } | null)?.name ?? "—"}</td>
                       <td
                         style={{
