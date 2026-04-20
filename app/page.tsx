@@ -78,6 +78,9 @@ export default async function HomePage() {
           <Link href="/budgets" style={navButtonStyle}>
             月度予算
           </Link>
+          <Link href="/transactions" style={navButtonStyle}>
+            取引一覧
+          </Link>
           <Link href="/transactions/new" style={navButtonStyle}>
             出入金入力
           </Link>
