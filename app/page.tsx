@@ -34,7 +34,7 @@ export default async function HomePage() {
 
     supabase
       .from("transactions")
-      .select("id, tx_date, amount, card_due_date, account_id, counterparties(name), accounts(name)")
+      .select("id, tx_date, amount, card_due_date, account_id, item_name, counterparties(name), accounts(name)")
       .not("card_due_date", "is", null)
       .gte("card_due_date", today)
       .order("card_due_date", { ascending: true })

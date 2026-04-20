@@ -38,6 +38,7 @@ export default function NewTransactionPage() {
   const [txDate, setTxDate]             = useState(todayYmd());
   const [txType, setTxType]             = useState<"income"|"expense">("expense");
   const [amount, setAmount]             = useState("");
+  const [itemName, setItemName]         = useState("");
   const [categoryId, setCategoryId]     = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [accountId, setAccountId]       = useState("");
@@ -84,7 +85,7 @@ export default function NewTransactionPage() {
         user_id: user.id, tx_date: txDate, target_month: firstDayOfMonth(txDate),
         tx_type: txType, amount: numericAmount,
         category_id: categoryId || null, counterparty_id: counterpartyId || null,
-        account_id: accountId, memo: memo.trim() || null, card_due_date: cardDueDate,
+        account_id: accountId, item_name: itemName.trim() || null, memo: memo.trim() || null, card_due_date: cardDueDate,
       });
       if (error) { setErrorMessage(error.message); return; }
       router.push("/transactions");
@@ -132,6 +133,11 @@ export default function NewTransactionPage() {
               <div className="field">
                 <label className="field-label">金額（円）</label>
                 <input type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} required className="field-input" placeholder="例: 3500" />
+              </div>
+
+              <div className="field">
+                <label className="field-label">品名 / 名称 <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
+                <input type="text" value={itemName} onChange={(e) => setItemName(e.target.value)} className="field-input" placeholder="例: 電気代、Amazonプライム" />
               </div>
 
               <div className="field">

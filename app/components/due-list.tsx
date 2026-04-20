@@ -8,6 +8,7 @@ export type DueRow = {
   amount: number;
   card_due_date: string;
   account_id: string;
+  item_name?: string | null;
   counterparties: { name?: string } | null;
   accounts: { name?: string } | null;
 };
@@ -120,8 +121,15 @@ export function DueList({ rows }: { rows: DueRow[] }) {
                     }}
                   >
                     <span style={{ whiteSpace: "nowrap" }}>{row.tx_date}</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {(row.counterparties as { name?: string } | null)?.name ?? "—"}
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                        {(row.counterparties as { name?: string } | null)?.name ?? "—"}
+                      </span>
+                      {row.item_name && (
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-4)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {row.item_name}
+                        </span>
+                      )}
                     </span>
                     <span style={{ fontWeight: 600, color: "var(--red)", whiteSpace: "nowrap" }}>
                       {row.amount.toLocaleString()} 円

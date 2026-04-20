@@ -36,6 +36,7 @@ export default function EditTransactionPage() {
   const [txDate, setTxDate]             = useState("");
   const [txType, setTxType]             = useState<"income"|"expense">("expense");
   const [amount, setAmount]             = useState("");
+  const [itemName, setItemName]         = useState("");
   const [categoryId, setCategoryId]     = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [accountId, setAccountId]       = useState("");
@@ -49,7 +50,7 @@ export default function EditTransactionPage() {
       if (userError || !user) { router.push("/login"); router.refresh(); return; }
 
       const [{ data: txData, error: txError }, { data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }] = await Promise.all([
-        supabase.from("transactions").select("id, tx_date, tx_type, amount, category_id, counterparty_id, account_id, memo").eq("id", txId).eq("user_id", user.id).single(),
+        supabase.from("transactions").select("id, tx_date, tx_type, amount, item_name, category_id, counterparty_id, account_id, memo").eq("id", txId).eq("user_id", user.id).single(),
         supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
         supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order, default_category_id").eq("is_active", true),
         supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order, close_day_type, close_day, pay_month_offset, pay_day_type, pay_day").eq("is_active", true),
@@ -63,6 +64,7 @@ export default function EditTransactionPage() {
       setTxDate(txData.tx_date);
       setTxType(txData.tx_type as "income"|"expense");
       setAmount(String(txData.amount));
+      setItemName(txData.item_name ?? "");
       setCategoryId(txData.category_id ?? "");
       setCounterpartyId(txData.counterparty_id ?? "");
       setAccountId(txData.account_id ?? "");
@@ -94,7 +96,7 @@ export default function EditTransactionPage() {
         tx_date: txDate, target_month: firstDayOfMonth(txDate), tx_type: txType,
         amount: numericAmount, category_id: categoryId || null,
         counterparty_id: counterpartyId || null, account_id: accountId,
-        memo: memo.trim() || null, card_due_date: cardDueDate,
+        item_name: itemName.trim() || null, memo: memo.trim() || null, card_due_date: cardDueDate,
       }).eq("id", txId).eq("user_id", user.id);
       if (error) { setErrorMessage(error.message); return; }
       router.push("/transactions");
@@ -160,6 +162,11 @@ export default function EditTransactionPage() {
               <div className="field">
                 <label className="field-label">金額（円）</label>
                 <input type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} required className="field-input" />
+              </div>
+
+              <div className="field">
+                <label className="field-label">品名 / 名称 <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
+                <input type="text" value={itemName} onChange={(e) => setItemName(e.target.value)} className="field-input" placeholder="例: 電気代、Amazonプライム" />
               </div>
 
               <div className="field">
