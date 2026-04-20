@@ -15,8 +15,6 @@ type SubRow = {
   account_id: string | null;
   category_id: string | null;
   is_active: boolean;
-  accounts: { name?: string } | null;
-  categories: { name?: string } | null;
 };
 
 const FREQ_LABELS: Record<string, string> = {
@@ -63,7 +61,7 @@ export default function SubscriptionsPage() {
 
     const [{ data: subData, error: subErr }, { data: catData }, { data: accData }] = await Promise.all([
       supabase.from("subscriptions")
-        .select("id, name, amount, frequency, next_billing_date, account_id, category_id, is_active, accounts(name), categories(name)")
+        .select("id, name, amount, frequency, next_billing_date, account_id, category_id, is_active")
         .eq("user_id", user.id)
         .order("next_billing_date", { ascending: true }),
       supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
@@ -266,8 +264,8 @@ export default function SubscriptionsPage() {
                       </td>
                       <td>{FREQ_LABELS[sub.frequency] ?? sub.frequency}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{sub.next_billing_date}</td>
-                      <td>{(sub.accounts as { name?: string } | null)?.name ?? "—"}</td>
-                      <td>{(sub.categories as { name?: string } | null)?.name ?? "—"}</td>
+                      <td>{accounts.find((a) => a.id === sub.account_id)?.name ?? "—"}</td>
+                      <td>{categories.find((c) => c.id === sub.category_id)?.name ?? "—"}</td>
                       <td>
                         <span className={sub.is_active ? "badge badge-income" : "badge"} style={!sub.is_active ? { background: "var(--surface-2)", color: "var(--text-3)" } : {}}>
                           {sub.is_active ? "有効" : "停止"}
