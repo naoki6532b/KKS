@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
 import { DueList, type DueRow } from "@/app/components/due-list";
+import { SubscriptionSync } from "@/app/components/subscription-sync";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -49,6 +50,7 @@ export default async function HomePage() {
   return (
     <>
       <Header />
+      <SubscriptionSync />
       <main className="page">
         <div className="page-heading">
           <div>
