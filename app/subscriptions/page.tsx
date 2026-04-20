@@ -61,7 +61,7 @@ export default function SubscriptionsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: subData }, { data: catData }, { data: accData }] = await Promise.all([
+    const [{ data: subData, error: subErr }, { data: catData }, { data: accData }] = await Promise.all([
       supabase.from("subscriptions")
         .select("id, name, amount, frequency, next_billing_date, account_id, category_id, is_active, accounts(name), categories(name)")
         .eq("user_id", user.id)
@@ -70,6 +70,7 @@ export default function SubscriptionsPage() {
       supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order").eq("is_active", true),
     ]);
 
+    if (subErr) { setErrorMsg(`取得エラー: ${subErr.message}`); setLoading(false); return; }
     setSubs((subData ?? []) as SubRow[]);
     setCategories([...(catData ?? [])].filter((x) => x.kind === "expense").sort(compareRows) as CategoryRow[]);
     setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
