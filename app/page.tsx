@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
+import { DueList, type DueRow } from "@/app/components/due-list";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -33,11 +34,11 @@ export default async function HomePage() {
 
     supabase
       .from("transactions")
-      .select("id, tx_date, amount, card_due_date, counterparties(name), accounts(name)")
+      .select("id, tx_date, amount, card_due_date, account_id, counterparties(name), accounts(name)")
       .not("card_due_date", "is", null)
       .gte("card_due_date", today)
       .order("card_due_date", { ascending: true })
-      .limit(10),
+      .order("account_id", { ascending: true }),
   ]);
 
   const budget       = budgetRow?.budget_amount ?? 0;
@@ -94,24 +95,7 @@ export default async function HomePage() {
             <h2 className="card-title">今後のカード引落予定</h2>
           </div>
           <div className="card-body">
-            {(dueRows ?? []).length === 0 ? (
-              <p className="empty-state">引落予定はありません</p>
-            ) : (
-              <ul className="due-list">
-                {(dueRows ?? []).map((row) => (
-                  <li key={row.id} className="due-item">
-                    <span className="due-date">{row.card_due_date}</span>
-                    <span className="due-name">
-                      {(row.counterparties as { name?: string } | null)?.name ?? "—"}
-                    </span>
-                    <span className="due-account">
-                      {(row.accounts as { name?: string } | null)?.name ?? "—"}
-                    </span>
-                    <span className="due-amount">{row.amount.toLocaleString()} 円</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <DueList rows={(dueRows ?? []) as DueRow[]} />
           </div>
         </div>
       </main>
