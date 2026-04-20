@@ -1,20 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { navButtonStyle } from "@/lib/navButtonStyle";
+import { Header } from "@/app/components/header";
 
-type BudgetRow = {
-  budget_amount: number;
-};
+type BudgetRow = { budget_amount: number };
 
-function getCurrentMonth(): string {
+function getCurrentMonth() {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export default function BudgetsPage() {
@@ -30,111 +25,43 @@ export default function BudgetsPage() {
 
   useEffect(() => {
     let mounted = true;
-
-    async function loadInitialData() {
+    async function load() {
       setLoading(true);
       setErrorMessage("");
       setInfoMessage("");
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        router.push("/login");
-        router.refresh();
-        return;
-      }
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) { router.push("/login"); router.refresh(); return; }
 
       const currentMonthStart = `${month}-01`;
-
-      const [{ data: currentBudget, error: currentError }, { data: previousBudget, error: previousError }] =
-        await Promise.all([
-          supabase
-            .from("monthly_budgets")
-            .select("budget_amount")
-            .eq("target_month", currentMonthStart)
-            .maybeSingle<BudgetRow>(),
-
-          supabase
-            .from("monthly_budgets")
-            .select("budget_amount")
-            .lt("target_month", currentMonthStart)
-            .order("target_month", { ascending: false })
-            .limit(1)
-            .maybeSingle<BudgetRow>(),
-        ]);
-
+      const [{ data: cur, error: curErr }, { data: prev, error: prevErr }] = await Promise.all([
+        supabase.from("monthly_budgets").select("budget_amount").eq("target_month", currentMonthStart).maybeSingle<BudgetRow>(),
+        supabase.from("monthly_budgets").select("budget_amount").lt("target_month", currentMonthStart).order("target_month", { ascending: false }).limit(1).maybeSingle<BudgetRow>(),
+      ]);
       if (!mounted) return;
-
-      if (currentError || previousError) {
-        setErrorMessage("予算データの読込でエラーが発生しました。");
-        setLoading(false);
-        return;
-      }
-
-      const defaultAmount =
-        currentBudget?.budget_amount ?? previousBudget?.budget_amount ?? "";
-
-      setBudgetAmount(String(defaultAmount));
+      if (curErr || prevErr) { setErrorMessage("予算データの読込でエラーが発生しました。"); setLoading(false); return; }
+      setBudgetAmount(String(cur?.budget_amount ?? prev?.budget_amount ?? ""));
       setLoading(false);
     }
-
-    loadInitialData();
-
-    return () => {
-      mounted = false;
-    };
+    load();
+    return () => { mounted = false; };
   }, [month, router, supabase]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
     setSaving(true);
     setErrorMessage("");
     setInfoMessage("");
-
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        router.push("/login");
-        router.refresh();
-        return;
-      }
-
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) { router.push("/login"); router.refresh(); return; }
       const amount = Number(budgetAmount);
-
-      if (!month) {
-        setErrorMessage("対象月を入力してください。");
-        return;
-      }
-
-      if (Number.isNaN(amount) || amount < 0) {
-        setErrorMessage("予算額は0以上の数値で入力してください。");
-        return;
-      }
-
+      if (!month) { setErrorMessage("対象月を入力してください。"); return; }
+      if (Number.isNaN(amount) || amount < 0) { setErrorMessage("予算額は0以上の数値で入力してください。"); return; }
       const { error } = await supabase.from("monthly_budgets").upsert(
-        {
-          user_id: user.id,
-          target_month: `${month}-01`,
-          budget_amount: amount,
-        },
-        {
-          onConflict: "user_id,target_month",
-        }
+        { user_id: user.id, target_month: `${month}-01`, budget_amount: amount },
+        { onConflict: "user_id,target_month" }
       );
-
-      if (error) {
-        setErrorMessage(error.message);
-        return;
-      }
-
+      if (error) { setErrorMessage(error.message); return; }
       setInfoMessage("予算を保存しました。");
       router.push("/");
       router.refresh();
@@ -146,89 +73,48 @@ export default function BudgetsPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-      <div style={{ marginBottom: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Link href="/" style={navButtonStyle}>
-          ホームへ戻る
-        </Link>
-        <Link href="/transactions/new" style={navButtonStyle}>
-          出入金入力
-        </Link>
-        <Link href="/masters" style={navButtonStyle}>
-          マスタ管理
-        </Link>
-      </div>
+    <>
+      <Header />
+      <main className="page-sm">
+        <div className="page-heading">
+          <h1 className="page-title">月度予算</h1>
+        </div>
 
-      <div style={{ background: "#fff", padding: 24, borderRadius: 12 }}>
-        <h1>月度予算入力</h1>
+        <div className="card">
+          <div className="card-body">
+            {errorMessage && <div className="alert alert-error">{errorMessage}</div>}
+            {infoMessage  && <div className="alert alert-success">{infoMessage}</div>}
 
-        {errorMessage ? (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 12,
-              borderRadius: 8,
-              background: "#ffe8e8",
-              color: "#b00020",
-              fontSize: 14,
-            }}
-          >
-            {errorMessage}
+            <form onSubmit={handleSubmit} className="form-grid">
+              <div className="field">
+                <label className="field-label">対象月</label>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                  required
+                  className="field-input"
+                />
+              </div>
+              <div className="field">
+                <label className="field-label">予算額（円）</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={budgetAmount}
+                  onChange={(e) => setBudgetAmount(e.target.value)}
+                  required
+                  className="field-input"
+                  placeholder="例: 200000"
+                />
+              </div>
+              <button type="submit" disabled={loading || saving} className="btn btn-primary btn-lg">
+                {loading ? "読込中..." : saving ? "保存中..." : "保存する"}
+              </button>
+            </form>
           </div>
-        ) : null}
-
-        {infoMessage ? (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 12,
-              borderRadius: 8,
-              background: "#e8f4ff",
-              color: "#0b57a4",
-              fontSize: 14,
-            }}
-          >
-            {infoMessage}
-          </div>
-        ) : null}
-
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
-          <label>
-            対象月
-            <br />
-            <input
-              name="month"
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              required
-              style={{ padding: 10, fontSize: 16 }}
-            />
-          </label>
-
-          <label>
-            予算額
-            <br />
-            <input
-              name="budget_amount"
-              type="number"
-              min="0"
-              value={budgetAmount}
-              onChange={(e) => setBudgetAmount(e.target.value)}
-              required
-              style={{ padding: 10, fontSize: 16 }}
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading || saving}
-            style={{ padding: 12, fontSize: 16 }}
-          >
-            {loading ? "読込中..." : saving ? "保存中..." : "保存"}
-          </button>
-        </form>
-      </div>
-    </main>
+        </div>
+      </main>
+    </>
   );
 }

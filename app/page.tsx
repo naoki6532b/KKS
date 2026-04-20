@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { nextMonthStart } from "@/lib/money";
-import { navButtonStyle, dangerButtonStyle } from "@/lib/navButtonStyle";
+import { Header } from "@/app/components/header";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -11,9 +11,7 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const monthStart = `${currentMonth}-01`;
@@ -31,8 +29,7 @@ export default async function HomePage() {
       .from("transactions")
       .select("amount, tx_type")
       .gte("tx_date", monthStart)
-      .lt("tx_date", monthEnd)
-      .order("tx_date", { ascending: false }),
+      .lt("tx_date", monthEnd),
 
     supabase
       .from("transactions")
@@ -43,164 +40,81 @@ export default async function HomePage() {
       .limit(10),
   ]);
 
-  const budget = budgetRow?.budget_amount ?? 0;
-  const incomeTotal =
-    txRows?.filter((x) => x.tx_type === "income").reduce((s, x) => s + x.amount, 0) ?? 0;
-  const expenseTotal =
-    txRows?.filter((x) => x.tx_type === "expense").reduce((s, x) => s + x.amount, 0) ?? 0;
-  const remaining = budget - expenseTotal;
+  const budget       = budgetRow?.budget_amount ?? 0;
+  const incomeTotal  = txRows?.filter((x) => x.tx_type === "income").reduce((s, x) => s + x.amount, 0) ?? 0;
+  const expenseTotal = txRows?.filter((x) => x.tx_type === "expense").reduce((s, x) => s + x.amount, 0) ?? 0;
+  const remaining    = budget - expenseTotal;
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 12,
-          marginBottom: 20,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: "clamp(24px, 5vw, 32px)" }}>Money Manager</h1>
-          <div style={{ marginTop: 4, color: "#666", fontSize: 14 }}>{currentMonth}</div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          <Link href="/budgets" style={navButtonStyle}>
-            月度予算
+    <>
+      <Header />
+      <main className="page">
+        <div className="page-heading">
+          <div>
+            <h1 className="page-title">ダッシュボード</h1>
+            <p className="page-subtitle">{currentMonth.replace("-", "年")}月</p>
+          </div>
+          <Link href="/transactions/new" className="btn btn-primary">
+            ＋ 出入金入力
           </Link>
-          <Link href="/transactions" style={navButtonStyle}>
-            取引一覧
-          </Link>
-          <Link href="/transactions/new" style={navButtonStyle}>
-            出入金入力
-          </Link>
-          <Link href="/masters" style={navButtonStyle}>
-            マスタ管理
-          </Link>
-          <form action="/logout" method="post">
-            <button type="submit" style={dangerButtonStyle}>
-              ログアウト
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            padding: 14,
-            borderRadius: 12,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>当月予算</div>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "clamp(20px, 5vw, 28px)",
-              lineHeight: 1.2,
-              wordBreak: "break-all",
-            }}
-          >
-            {budget.toLocaleString()} 円
-          </strong>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: 14,
-            borderRadius: 12,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>当月収入</div>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "clamp(20px, 5vw, 28px)",
-              lineHeight: 1.2,
-              wordBreak: "break-all",
-            }}
-          >
-            {incomeTotal.toLocaleString()} 円
-          </strong>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-label">当月予算</div>
+            <div className="stat-value">
+              {budget.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">当月収入</div>
+            <div className="stat-value" style={{ color: "var(--green)" }}>
+              {incomeTotal.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">当月支出</div>
+            <div className="stat-value" style={{ color: "var(--red)" }}>
+              {expenseTotal.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">残り使用可能</div>
+            <div
+              className="stat-value"
+              style={{ color: remaining < 0 ? "var(--red)" : "var(--sapphire)" }}
+            >
+              {remaining.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: 14,
-            borderRadius: 12,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>当月支出</div>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "clamp(20px, 5vw, 28px)",
-              lineHeight: 1.2,
-              wordBreak: "break-all",
-            }}
-          >
-            {expenseTotal.toLocaleString()} 円
-          </strong>
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">今後のカード引落予定</h2>
+          </div>
+          <div className="card-body">
+            {(dueRows ?? []).length === 0 ? (
+              <p className="empty-state">引落予定はありません</p>
+            ) : (
+              <ul className="due-list">
+                {(dueRows ?? []).map((row) => (
+                  <li key={row.id} className="due-item">
+                    <span className="due-date">{row.card_due_date}</span>
+                    <span className="due-name">
+                      {(row.counterparties as { name?: string } | null)?.name ?? "—"}
+                    </span>
+                    <span className="due-account">
+                      {(row.accounts as { name?: string } | null)?.name ?? "—"}
+                    </span>
+                    <span className="due-amount">{row.amount.toLocaleString()} 円</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-
-        <div
-          style={{
-            background: "#fff",
-            padding: 14,
-            borderRadius: 12,
-            minWidth: 0,
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>あと使える額</div>
-          <strong
-            style={{
-              display: "block",
-              fontSize: "clamp(20px, 5vw, 28px)",
-              lineHeight: 1.2,
-              wordBreak: "break-all",
-            }}
-          >
-            {remaining.toLocaleString()} 円
-          </strong>
-        </div>
-      </section>
-
-      <section style={{ background: "#fff", padding: 16, borderRadius: 12 }}>
-        <h2 style={{ marginTop: 0, fontSize: "clamp(18px, 4.5vw, 24px)" }}>今後のカード引落予定</h2>
-        <ul style={{ margin: 0, paddingLeft: 20 }}>
-          {(dueRows ?? []).map((row) => (
-            <li key={row.id} style={{ marginBottom: 6, lineHeight: 1.5, wordBreak: "break-word" }}>
-              {row.card_due_date} / {(row.accounts as { name?: string } | null)?.name ?? "-"} /{" "}
-              {(row.counterparties as { name?: string } | null)?.name ?? "-"} /{" "}
-              {row.amount.toLocaleString()} 円
-            </li>
-          ))}
-          {(dueRows ?? []).length === 0 && <li>予定はありません</li>}
-        </ul>
-      </section>
-    </main>
+      </main>
+    </>
   );
-}                                                                         
+}
