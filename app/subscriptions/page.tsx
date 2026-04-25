@@ -20,6 +20,7 @@ type SubRow = {
 const FREQ_LABELS: Record<string, string> = {
   weekly: "毎週",
   monthly: "毎月",
+  "2months": "2ヶ月毎",
   "3months": "3ヶ月毎",
   "6months": "6ヶ月毎",
   annual: "毎年",
@@ -190,6 +191,7 @@ export default function SubscriptionsPage() {
                   <select className="field-input" value={form.frequency} onChange={(e) => setField("frequency", e.target.value)}>
                     <option value="weekly">毎週</option>
                     <option value="monthly">毎月</option>
+                    <option value="2months">2ヶ月毎</option>
                     <option value="3months">3ヶ月毎</option>
                     <option value="6months">6ヶ月毎</option>
                     <option value="annual">毎年</option>

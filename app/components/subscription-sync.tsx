@@ -17,7 +17,7 @@ function calcNextBillingDate(dateStr: string, frequency: string): string {
     const dt = new Date(y, m - 1, d + 7);
     return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
   }
-  const offsetMap: Record<string, number> = { monthly:1, "3months":3, "6months":6, annual:12 };
+  const offsetMap: Record<string, number> = { monthly:1, "2months":2, "3months":3, "6months":6, annual:12 };
   return addM(offsetMap[frequency] ?? 1);
 }
 
