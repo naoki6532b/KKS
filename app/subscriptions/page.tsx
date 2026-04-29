@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/app/components/header";
 
-type CategoryRow = { id: string; kind: "income" | "expense"; name: string; is_favorite: boolean; sort_order: number };
-type AccountRow  = { id: string; account_type: "cash" | "bank" | "card"; name: string; is_favorite: boolean; sort_order: number };
+type CategoryRow     = { id: string; kind: "income" | "expense"; name: string; is_favorite: boolean; sort_order: number };
+type AccountRow      = { id: string; account_type: "cash" | "bank" | "card"; name: string; is_favorite: boolean; sort_order: number };
+type CounterpartyRow = { id: string; kind: "income" | "expense" | "both"; name: string; is_favorite: boolean; sort_order: number };
 type SubRow = {
   id: string;
   name: string;
@@ -14,6 +15,8 @@ type SubRow = {
   next_billing_date: string;
   account_id: string | null;
   category_id: string | null;
+  counterparty_id: string | null;
+  counterparty_name: string | null;
   is_active: boolean;
 };
 
@@ -34,20 +37,21 @@ function compareRows<T extends { is_favorite?: boolean; sort_order?: number; nam
   return (a.name ?? "").localeCompare(b.name ?? "", "ja");
 }
 
-const EMPTY_FORM = { name: "", amount: "", frequency: "monthly", next_billing_date: "", account_id: "", category_id: "" };
+const EMPTY_FORM = { name: "", amount: "", frequency: "monthly", next_billing_date: "", account_id: "", category_id: "", counterparty_id: "", counterparty_name: "" };
 
 export default function SubscriptionsPage() {
   const supabase = useMemo(() => createClient(), []);
 
-  const [subs, setSubs]             = useState<SubRow[]>([]);
-  const [categories, setCategories] = useState<CategoryRow[]>([]);
-  const [accounts, setAccounts]     = useState<AccountRow[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [saving, setSaving]         = useState(false);
-  const [errorMsg, setErrorMsg]     = useState("");
+  const [subs, setSubs]                 = useState<SubRow[]>([]);
+  const [categories, setCategories]     = useState<CategoryRow[]>([]);
+  const [accounts, setAccounts]         = useState<AccountRow[]>([]);
+  const [counterparties, setCounterparties] = useState<CounterpartyRow[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [saving, setSaving]             = useState(false);
+  const [errorMsg, setErrorMsg]         = useState("");
 
-  const [editId, setEditId]   = useState<string | null>(null);
-  const [form, setForm]       = useState(EMPTY_FORM);
+  const [editId, setEditId]     = useState<string | null>(null);
+  const [form, setForm]         = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
@@ -60,19 +64,21 @@ export default function SubscriptionsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: subData, error: subErr }, { data: catData }, { data: accData }] = await Promise.all([
+    const [{ data: subData, error: subErr }, { data: catData }, { data: accData }, { data: cpData }] = await Promise.all([
       supabase.from("subscriptions")
-        .select("id, name, amount, frequency, next_billing_date, account_id, category_id, is_active")
+        .select("id, name, amount, frequency, next_billing_date, account_id, category_id, counterparty_id, counterparty_name, is_active")
         .eq("user_id", user.id)
         .order("next_billing_date", { ascending: true }),
       supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
       supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order").eq("is_active", true),
+      supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
     ]);
 
     if (subErr) { setErrorMsg(`取得エラー: ${subErr.message}`); setLoading(false); return; }
     setSubs((subData ?? []) as SubRow[]);
     setCategories([...(catData ?? [])].filter((x) => x.kind === "expense").sort(compareRows) as CategoryRow[]);
     setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
+    setCounterparties([...(cpData ?? [])].filter((x) => x.kind === "expense" || x.kind === "both").sort(compareRows) as CounterpartyRow[]);
     setLoading(false);
   }
 
@@ -92,6 +98,8 @@ export default function SubscriptionsPage() {
       next_billing_date: sub.next_billing_date,
       account_id: sub.account_id ?? "",
       category_id: sub.category_id ?? "",
+      counterparty_id: sub.counterparty_id ?? "",
+      counterparty_name: sub.counterparty_name ?? "",
     });
     setErrorMsg("");
     setShowForm(true);
@@ -128,6 +136,8 @@ export default function SubscriptionsPage() {
         next_billing_date: form.next_billing_date,
         account_id: form.account_id || null,
         category_id: form.category_id || null,
+        counterparty_id: form.counterparty_id || null,
+        counterparty_name: form.counterparty_name.trim() || null,
       };
 
       let err;
@@ -223,6 +233,21 @@ export default function SubscriptionsPage() {
                   </select>
                 </div>
 
+                <div className="field">
+                  <label className="field-label">相手先ジャンル <span style={{ fontWeight: 400, color: "var(--text-4)", fontSize: 11 }}>（任意）</span></label>
+                  <select className="field-input" value={form.counterparty_id} onChange={(e) => setField("counterparty_id", e.target.value)}>
+                    <option value="">未選択</option>
+                    {counterparties.map((c) => (
+                      <option key={c.id} value={c.id}>{c.is_favorite ? "★ " : ""}{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label className="field-label">相手先名 <span style={{ fontWeight: 400, color: "var(--text-4)", fontSize: 11 }}>（任意）</span></label>
+                  <input type="text" className="field-input" value={form.counterparty_name} onChange={(e) => setField("counterparty_name", e.target.value)} placeholder="例: Netflix Japan" />
+                </div>
+
                 <div className="btn-group">
                   <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
                     {saving ? "保存中..." : "保存する"}
@@ -253,6 +278,8 @@ export default function SubscriptionsPage() {
                     <th>次回請求日</th>
                     <th>口座</th>
                     <th>科目</th>
+                    <th>相手先ジャンル</th>
+                    <th>相手先名</th>
                     <th>状態</th>
                     <th></th>
                   </tr>
@@ -268,6 +295,8 @@ export default function SubscriptionsPage() {
                       <td style={{ whiteSpace: "nowrap" }}>{sub.next_billing_date}</td>
                       <td>{accounts.find((a) => a.id === sub.account_id)?.name ?? "—"}</td>
                       <td>{categories.find((c) => c.id === sub.category_id)?.name ?? "—"}</td>
+                      <td>{counterparties.find((c) => c.id === sub.counterparty_id)?.name ?? "—"}</td>
+                      <td>{sub.counterparty_name ?? "—"}</td>
                       <td>
                         <span className={sub.is_active ? "badge badge-income" : "badge"} style={!sub.is_active ? { background: "var(--surface-2)", color: "var(--text-3)" } : {}}>
                           {sub.is_active ? "有効" : "停止"}
@@ -276,11 +305,7 @@ export default function SubscriptionsPage() {
                       <td>
                         <div className="table-actions">
                           <button className="btn btn-secondary btn-sm" onClick={() => openEdit(sub)}>編集</button>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleToggleActive(sub)}
-                            style={{ minWidth: 52 }}
-                          >
+                          <button className="btn btn-secondary btn-sm" onClick={() => handleToggleActive(sub)} style={{ minWidth: 52 }}>
                             {sub.is_active ? "停止" : "再開"}
                           </button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleDelete(sub)}>削除</button>

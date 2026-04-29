@@ -59,6 +59,8 @@ export function SubscriptionSync() {
               amount: sub.amount,
               account_id: sub.account_id ?? null,
               category_id: sub.category_id ?? null,
+              counterparty_id: sub.counterparty_id ?? null,
+              counterparty_name: sub.counterparty_name ?? null,
               item_name: sub.name,
               memo: "サブスク自動記録",
               subscription_id: sub.id,
