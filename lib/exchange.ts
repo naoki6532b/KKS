@@ -32,17 +32,13 @@ export const CURRENCY_MAP = new Map(CURRENCIES.map((c) => [c.code, c]));
 
 export async function fetchRateToJPY(currency: string, date: string): Promise<number> {
   if (currency === "JPY") return 1;
-  const tryFetch = async (url: string) => {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data.rates?.JPY as number) ?? null;
-  };
-  const rate =
-    (await tryFetch(`https://api.frankfurter.app/${date}?from=${currency}&to=JPY`)) ??
-    (await tryFetch(`https://api.frankfurter.app/latest?from=${currency}&to=JPY`));
-  if (rate == null) throw new Error(`${currency}の為替レートを取得できませんでした`);
-  return rate;
+  const res = await fetch(`/api/exchange-rate?currency=${encodeURIComponent(currency)}&date=${encodeURIComponent(date)}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `${currency}のレートを取得できませんでした`);
+  }
+  const data = await res.json() as { rate: number };
+  return data.rate;
 }
 
 export function fmtFx(currencyAmount: number, currency: string, exchangeRate: number): string {
