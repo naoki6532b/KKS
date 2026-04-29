@@ -20,6 +20,14 @@ function getCurrentMonth() {
   return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
 }
 
+function shiftMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const total = y * 12 + (m - 1) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2,"0")}`;
+}
+
 type CategoryMeta = { id: string; name: string; kind: "income"|"expense" };
 type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null };
 
@@ -215,7 +223,8 @@ export default function BalancePage() {
     return () => { mounted = false; };
   }, [month, router, supabase]);
 
-  const currentCarryover = carryover + monthIncome - monthExpense;
+  const nextCarryover   = carryover + monthIncome - monthExpense;
+  const budgetVariance  = budget - monthExpense;
   const chartData = mode === "total" ? totalData : catData;
 
   const incCats = cats.filter(c=>c.kind==="income");
@@ -234,16 +243,16 @@ export default function BalancePage() {
       <main className="page">
         {/* Heading */}
         <div className="page-heading">
-          <div>
-            <h1 className="page-title">収支バランス</h1>
-          </div>
-          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-            <input type="month" value={month} onChange={(e)=>setMonth(e.target.value)} className="field-input" style={{ width:"auto" }} />
+          <h1 className="page-title">収支バランス</h1>
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <button type="button" onClick={() => setMonth((m) => shiftMonth(m, -1))} className="btn btn-secondary" style={{ padding:"6px 12px", fontSize:16 }}>‹</button>
+            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="field-input" style={{ width:"auto" }} />
+            <button type="button" onClick={() => setMonth((m) => shiftMonth(m, +1))} className="btn btn-secondary" style={{ padding:"6px 12px", fontSize:16 }} disabled={month >= getCurrentMonth()}>›</button>
           </div>
         </div>
 
         {/* Summary cards */}
-        <div className="stats-grid">
+        <div className="stats-grid" style={{ gridTemplateColumns:"repeat(3, 1fr)" }}>
           <div className="stat-card">
             <div className="stat-label">前月繰越</div>
             <div className="stat-value" style={{ color: carryover>=0 ? "var(--text)" : "var(--red)" }}>
@@ -263,9 +272,21 @@ export default function BalancePage() {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">当月繰越</div>
-            <div className="stat-value" style={{ color: currentCarryover>=0 ? "var(--sapphire)" : "var(--red)" }}>
-              {currentCarryover.toLocaleString()}<span className="stat-value-unit">円</span>
+            <div className="stat-label">予算</div>
+            <div className="stat-value" style={{ color:"var(--sapphire)" }}>
+              {budget > 0 ? <>{budget.toLocaleString()}<span className="stat-value-unit">円</span></> : <span style={{ fontSize:16, color:"var(--text-3)" }}>未設定</span>}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">予算差額 <span style={{ fontSize:11, fontWeight:400, color:"var(--text-4)" }}>（予算－支出）</span></div>
+            <div className="stat-value" style={{ color: budget===0 ? "var(--text-3)" : budgetVariance>=0 ? "var(--green)" : "var(--red)" }}>
+              {budget > 0 ? <>{budgetVariance >= 0 ? "+" : ""}{budgetVariance.toLocaleString()}<span className="stat-value-unit">円</span></> : <span style={{ fontSize:16, color:"var(--text-3)" }}>—</span>}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">翌月繰越</div>
+            <div className="stat-value" style={{ color: nextCarryover>=0 ? "var(--sapphire)" : "var(--red)" }}>
+              {nextCarryover.toLocaleString()}<span className="stat-value-unit">円</span>
             </div>
           </div>
         </div>
