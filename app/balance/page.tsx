@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, Cell, LabelList,
+  PieChart, Pie, Legend,
 } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { nextMonthStart } from "@/lib/money";
@@ -28,8 +29,43 @@ function shiftMonth(ym: string, delta: number): string {
   return `${ny}-${String(nm).padStart(2,"0")}`;
 }
 
+const PIE_COLORS = ["#f87171","#fb923c","#fbbf24","#4ade80","#60a5fa","#a78bfa","#e879f9","#f472b6","#34d399","#94a3b8"];
+
 type CategoryMeta = { id: string; name: string; kind: "income"|"expense" };
-type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null };
+type CpMeta = { id: string; name: string };
+type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null };
+
+type PieSlice = { name: string; value: number };
+
+function buildCpNamePie(txRows: TxRow[]): PieSlice[] {
+  const map = new Map<string, number>();
+  for (const tx of txRows) {
+    if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
+    const key = tx.counterparty_name?.trim() || "未設定";
+    map.set(key, (map.get(key) ?? 0) + tx.amount);
+  }
+  return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+
+function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[] {
+  const map = new Map<string, number>();
+  for (const tx of txRows) {
+    if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
+    const key = tx.counterparty_id ? (cpMap.get(tx.counterparty_id) ?? "未設定") : "未設定";
+    map.set(key, (map.get(key) ?? 0) + tx.amount);
+  }
+  return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+
+function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:"#fff", border:"1px solid #d6e2f0", borderRadius:8, padding:"8px 12px", fontSize:12, boxShadow:"0 4px 16px rgba(13,43,94,0.12)" }}>
+      <div style={{ fontWeight:700, color:"#0d2b5e" }}>{payload[0].name}</div>
+      <div style={{ color:"#dc2626" }}>{payload[0].value.toLocaleString()} 円</div>
+    </div>
+  );
+}
 
 // ── chart data builders ─────────────────────────────────────────────
 
@@ -178,6 +214,8 @@ export default function BalancePage() {
   const [totalData, setTotalData]       = useState<DayBase[]>([]);
   const [catData, setCatData]           = useState<DayBase[]>([]);
   const [cats, setCats]                 = useState<CategoryMeta[]>([]);
+  const [cpNamePie, setCpNamePie]       = useState<PieSlice[]>([]);
+  const [cpGenrePie, setCpGenrePie]     = useState<PieSlice[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -194,11 +232,13 @@ export default function BalancePage() {
         { data: curRows },
         { data: budgetRow },
         { data: catRows },
+        { data: cpRows },
       ] = await Promise.all([
         supabase.from("transactions").select("amount, tx_type").lt("tx_date", monthStart),
-        supabase.from("transactions").select("tx_date, tx_type, amount, category_id").gte("tx_date", monthStart).lt("tx_date", monthEnd),
+        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name").gte("tx_date", monthStart).lt("tx_date", monthEnd),
         supabase.from("monthly_budgets").select("budget_amount").eq("target_month", monthStart).maybeSingle(),
         supabase.from("categories").select("id, name, kind").eq("is_active", true),
+        supabase.from("counterparties").select("id, name").eq("is_active", true),
       ]);
 
       if (!mounted) return;
@@ -209,6 +249,7 @@ export default function BalancePage() {
       const income   = cur.filter(t=>t.tx_type==="income").reduce((s,t)=>s+t.amount, 0);
       const expense  = cur.filter(t=>t.tx_type==="expense").reduce((s,t)=>s+t.amount, 0);
       const allCats  = (catRows ?? []) as CategoryMeta[];
+      const cpMap    = new Map<string, string>((cpRows ?? []).map((c: CpMeta) => [c.id, c.name]));
 
       setCarryover(prevBal);
       setMonthIncome(income);
@@ -217,6 +258,8 @@ export default function BalancePage() {
       setCats(allCats);
       setTotalData(buildTotalData(cur, monthStart));
       setCatData(buildCategoryData(cur, allCats, monthStart));
+      setCpNamePie(buildCpNamePie(cur));
+      setCpGenrePie(buildCpGenrePie(cur, cpMap));
       setLoading(false);
     }
     loadData();
@@ -290,6 +333,51 @@ export default function BalancePage() {
             </div>
           </div>
         </div>
+
+        {/* Pie charts */}
+        {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0) && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
+            {/* 相手先名別 */}
+            <div className="card">
+              <div className="card-header"><h2 className="card-title">相手先名別 支出</h2></div>
+              <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+                {cpNamePie.length === 0 ? (
+                  <p className="empty-state" style={{ fontSize:13 }}>相手先名のデータなし</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                        {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<PieTooltip />} />
+                      <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* 相手先ジャンル別 */}
+            <div className="card">
+              <div className="card-header"><h2 className="card-title">相手先ジャンル別 支出</h2></div>
+              <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+                {cpGenrePie.length === 0 ? (
+                  <p className="empty-state" style={{ fontSize:13 }}>相手先ジャンルのデータなし</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                        {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<PieTooltip />} />
+                      <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Chart card */}
         <div className="card">

@@ -33,14 +33,15 @@ export default function EditTransactionPage() {
   const [counterparties, setCounterparties] = useState<CounterpartyRow[]>([]);
   const [accounts, setAccounts]             = useState<AccountRow[]>([]);
 
-  const [txDate, setTxDate]             = useState("");
-  const [txType, setTxType]             = useState<"income"|"expense">("expense");
-  const [amount, setAmount]             = useState("");
-  const [itemName, setItemName]         = useState("");
-  const [categoryId, setCategoryId]     = useState("");
-  const [counterpartyId, setCounterpartyId] = useState("");
-  const [accountId, setAccountId]       = useState("");
-  const [memo, setMemo]                 = useState("");
+  const [txDate, setTxDate]                   = useState("");
+  const [txType, setTxType]                   = useState<"income"|"expense">("expense");
+  const [amount, setAmount]                   = useState("");
+  const [itemName, setItemName]               = useState("");
+  const [categoryId, setCategoryId]           = useState("");
+  const [counterpartyId, setCounterpartyId]   = useState("");
+  const [counterpartyName, setCounterpartyName] = useState("");
+  const [accountId, setAccountId]             = useState("");
+  const [memo, setMemo]                       = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -50,7 +51,7 @@ export default function EditTransactionPage() {
       if (userError || !user) { router.push("/login"); router.refresh(); return; }
 
       const [{ data: txData, error: txError }, { data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }] = await Promise.all([
-        supabase.from("transactions").select("id, tx_date, tx_type, amount, item_name, category_id, counterparty_id, account_id, memo").eq("id", txId).eq("user_id", user.id).single(),
+        supabase.from("transactions").select("id, tx_date, tx_type, amount, item_name, category_id, counterparty_id, counterparty_name, account_id, memo").eq("id", txId).eq("user_id", user.id).single(),
         supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
         supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order, default_category_id").eq("is_active", true),
         supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order, close_day_type, close_day, pay_month_offset, pay_day_type, pay_day").eq("is_active", true),
@@ -67,6 +68,7 @@ export default function EditTransactionPage() {
       setItemName(txData.item_name ?? "");
       setCategoryId(txData.category_id ?? "");
       setCounterpartyId(txData.counterparty_id ?? "");
+      setCounterpartyName((txData as { counterparty_name?: string | null }).counterparty_name ?? "");
       setAccountId(txData.account_id ?? "");
       setMemo(txData.memo ?? "");
       setCategories([...(catData ?? [])].sort(compareRows) as CategoryRow[]);
@@ -95,7 +97,9 @@ export default function EditTransactionPage() {
       const { error } = await supabase.from("transactions").update({
         tx_date: txDate, target_month: firstDayOfMonth(txDate), tx_type: txType,
         amount: numericAmount, category_id: categoryId || null,
-        counterparty_id: counterpartyId || null, account_id: accountId,
+        counterparty_id: counterpartyId || null,
+        counterparty_name: counterpartyName.trim() || null,
+        account_id: accountId,
         item_name: itemName.trim() || null, memo: memo.trim() || null, card_due_date: cardDueDate,
       }).eq("id", txId).eq("user_id", user.id);
       if (error) { setErrorMessage(error.message); return; }
@@ -180,13 +184,18 @@ export default function EditTransactionPage() {
               </div>
 
               <div className="field">
-                <label className="field-label">相手先</label>
+                <label className="field-label">相手先ジャンル <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
                 <select value={counterpartyId} onChange={(e) => setCounterpartyId(e.target.value)} className="field-input">
                   <option value="">未選択</option>
                   {filteredCounterparties.map((r) => (
                     <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}{r.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="field">
+                <label className="field-label">相手先名 <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
+                <input type="text" value={counterpartyName} onChange={(e) => setCounterpartyName(e.target.value)} className="field-input" placeholder="例: イオン、東京電力" />
               </div>
 
               <div className="field">

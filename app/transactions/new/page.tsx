@@ -31,18 +31,19 @@ export default function NewTransactionPage() {
   const [saving, setSaving]       = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [categories, setCategories]       = useState<CategoryRow[]>([]);
+  const [categories, setCategories]         = useState<CategoryRow[]>([]);
   const [counterparties, setCounterparties] = useState<CounterpartyRow[]>([]);
-  const [accounts, setAccounts]           = useState<AccountRow[]>([]);
+  const [accounts, setAccounts]             = useState<AccountRow[]>([]);
 
-  const [txDate, setTxDate]             = useState(todayYmd());
-  const [txType, setTxType]             = useState<"income"|"expense">("expense");
-  const [amount, setAmount]             = useState("");
-  const [itemName, setItemName]         = useState("");
-  const [categoryId, setCategoryId]     = useState("");
-  const [counterpartyId, setCounterpartyId] = useState("");
-  const [accountId, setAccountId]       = useState("");
-  const [memo, setMemo]                 = useState("");
+  const [txDate, setTxDate]                   = useState(todayYmd());
+  const [txType, setTxType]                   = useState<"income"|"expense">("expense");
+  const [amount, setAmount]                   = useState("");
+  const [itemName, setItemName]               = useState("");
+  const [categoryId, setCategoryId]           = useState("");
+  const [counterpartyId, setCounterpartyId]   = useState("");
+  const [counterpartyName, setCounterpartyName] = useState("");
+  const [accountId, setAccountId]             = useState("");
+  const [memo, setMemo]                       = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -85,6 +86,7 @@ export default function NewTransactionPage() {
         user_id: user.id, tx_date: txDate, target_month: firstDayOfMonth(txDate),
         tx_type: txType, amount: numericAmount,
         category_id: categoryId || null, counterparty_id: counterpartyId || null,
+        counterparty_name: counterpartyName.trim() || null,
         account_id: accountId, item_name: itemName.trim() || null, memo: memo.trim() || null, card_due_date: cardDueDate,
       });
       if (error) { setErrorMessage(error.message); return; }
@@ -151,7 +153,7 @@ export default function NewTransactionPage() {
               </div>
 
               <div className="field">
-                <label className="field-label">相手先</label>
+                <label className="field-label">相手先ジャンル <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
                 <select
                   value={counterpartyId}
                   onChange={(e) => {
@@ -169,6 +171,11 @@ export default function NewTransactionPage() {
                     <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}{r.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="field">
+                <label className="field-label">相手先名 <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
+                <input type="text" value={counterpartyName} onChange={(e) => setCounterpartyName(e.target.value)} className="field-input" placeholder="例: イオン、東京電力" />
               </div>
 
               <div className="field">

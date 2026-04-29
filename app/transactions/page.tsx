@@ -9,6 +9,7 @@ type TxRow = {
   tx_type: string;
   amount: number;
   item_name?: string | null;
+  counterparty_name?: string | null;
   memo?: string | null;
   categories: { name?: string } | null;
   counterparties: { name?: string } | null;
@@ -35,7 +36,7 @@ export default async function TransactionsPage() {
 
   const { data: rows, error } = await supabase
     .from("transactions")
-    .select("id, tx_date, tx_type, amount, item_name, memo, categories(name), counterparties(name), accounts(name)")
+    .select("id, tx_date, tx_type, amount, item_name, counterparty_name, memo, categories(name), counterparties(name), accounts(name)")
     .order("tx_date", { ascending: true })
     .order("created_at", { ascending: true })
     .limit(500);
@@ -74,7 +75,8 @@ export default async function TransactionsPage() {
                       <tr>
                         <th>日付</th>
                         <th>科目</th>
-                        <th>相手先</th>
+                        <th>相手先ジャンル</th>
+                        <th>相手先名</th>
                         <th>品名 / 名称</th>
                         <th>口座</th>
                         <th>メモ</th>
@@ -89,11 +91,12 @@ export default async function TransactionsPage() {
                           <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>{row.tx_date}</td>
                           <td>{row.categories?.name ?? "—"}</td>
                           <td>{row.counterparties?.name ?? "—"}</td>
-                          <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
+                          <td style={{ whiteSpace: "nowrap" }}>{row.counterparty_name ?? "—"}</td>
+                          <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
                             {row.item_name ?? ""}
                           </td>
                           <td>{row.accounts?.name ?? "—"}</td>
-                          <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>
+                          <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>
                             {row.memo ?? ""}
                           </td>
                           <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -118,7 +121,7 @@ export default async function TransactionsPage() {
                     </tbody>
                     <tfoot>
                       <tr style={{ background: "var(--surface-2)", fontWeight: 700 }}>
-                        <td colSpan={6} style={{ textAlign: "right", color: "var(--text-2)", fontSize: 13 }}>月合計</td>
+                        <td colSpan={7} style={{ textAlign: "right", color: "var(--text-2)", fontSize: 13 }}>月合計</td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           <span className="amount-income">{incomeTotal.toLocaleString()}</span>
                         </td>
