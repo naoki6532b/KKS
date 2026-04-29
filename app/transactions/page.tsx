@@ -2,12 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/app/components/header";
+import { CURRENCY_MAP } from "@/lib/exchange";
 
 type TxRow = {
   id: string;
   tx_date: string;
   tx_type: string;
   amount: number;
+  currency?: string | null;
+  currency_amount?: number | null;
+  exchange_rate?: number | null;
   item_name?: string | null;
   counterparty_name?: string | null;
   memo?: string | null;
@@ -36,7 +40,7 @@ export default async function TransactionsPage() {
 
   const { data: rows, error } = await supabase
     .from("transactions")
-    .select("id, tx_date, tx_type, amount, item_name, counterparty_name, memo, categories(name), counterparties(name), accounts(name)")
+    .select("id, tx_date, tx_type, amount, currency, currency_amount, exchange_rate, item_name, counterparty_name, memo, categories(name), counterparties(name), accounts(name)")
     .order("tx_date", { ascending: true })
     .order("created_at", { ascending: true })
     .limit(500);
@@ -101,12 +105,20 @@ export default async function TransactionsPage() {
                           </td>
                           <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                             {row.tx_type === "income" ? (
-                              <span className="amount-income">{row.amount.toLocaleString()}</span>
+                              <span className="amount-income">
+                                {row.currency && row.currency !== "JPY" && row.currency_amount
+                                  ? <>{CURRENCY_MAP.get(row.currency)?.symbol}{row.currency_amount.toLocaleString()}<br/><span style={{fontSize:11,fontWeight:400}}>({row.amount.toLocaleString()}円)</span></>
+                                  : <>{row.amount.toLocaleString()}</>}
+                              </span>
                             ) : ""}
                           </td>
                           <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                             {row.tx_type === "expense" ? (
-                              <span className="amount-expense">{row.amount.toLocaleString()}</span>
+                              <span className="amount-expense">
+                                {row.currency && row.currency !== "JPY" && row.currency_amount
+                                  ? <>{CURRENCY_MAP.get(row.currency)?.symbol}{row.currency_amount.toLocaleString()}<br/><span style={{fontSize:11,fontWeight:400}}>({row.amount.toLocaleString()}円)</span></>
+                                  : <>{row.amount.toLocaleString()}</>}
+                              </span>
                             ) : ""}
                           </td>
                           <td>

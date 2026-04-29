@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { firstDayOfMonth } from "@/lib/money";
+import { fetchRateToJPY } from "@/lib/exchange";
 
 function calcNextBillingDate(dateStr: string, frequency: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -51,12 +52,27 @@ export function SubscriptionSync() {
             .maybeSingle();
 
           if (!existing) {
+            const currency = sub.currency ?? "JPY";
+            const currencyAmount = sub.currency_amount ?? null;
+            let jpyAmount = sub.amount;
+            let exchangeRate: number | null = null;
+            if (currency !== "JPY" && currencyAmount) {
+              try {
+                exchangeRate = await fetchRateToJPY(currency, billingDate);
+                jpyAmount = Math.round(currencyAmount * exchangeRate);
+              } catch {
+                jpyAmount = sub.amount;
+              }
+            }
             await supabase.from("transactions").insert({
               user_id: user.id,
               tx_date: billingDate,
               target_month: firstDayOfMonth(billingDate),
               tx_type: "expense",
-              amount: sub.amount,
+              amount: jpyAmount,
+              currency,
+              currency_amount: currency !== "JPY" ? currencyAmount : null,
+              exchange_rate: exchangeRate,
               account_id: sub.account_id ?? null,
               category_id: sub.category_id ?? null,
               counterparty_id: sub.counterparty_id ?? null,

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { CURRENCIES, fetchRateToJPY } from "@/lib/exchange";
 import { Header } from "@/app/components/header";
 
 type CategoryRow     = { id: string; kind: "income" | "expense"; name: string; is_favorite: boolean; sort_order: number };
@@ -11,6 +12,8 @@ type SubRow = {
   id: string;
   name: string;
   amount: number;
+  currency: string;
+  currency_amount: number | null;
   frequency: string;
   next_billing_date: string;
   account_id: string | null;
@@ -37,7 +40,7 @@ function compareRows<T extends { is_favorite?: boolean; sort_order?: number; nam
   return (a.name ?? "").localeCompare(b.name ?? "", "ja");
 }
 
-const EMPTY_FORM = { name: "", amount: "", frequency: "monthly", next_billing_date: "", account_id: "", category_id: "", counterparty_id: "", counterparty_name: "" };
+const EMPTY_FORM = { name: "", amount: "", currency: "JPY", frequency: "monthly", next_billing_date: "", account_id: "", category_id: "", counterparty_id: "", counterparty_name: "" };
 
 export default function SubscriptionsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -66,7 +69,7 @@ export default function SubscriptionsPage() {
 
     const [{ data: subData, error: subErr }, { data: catData }, { data: accData }, { data: cpData }] = await Promise.all([
       supabase.from("subscriptions")
-        .select("id, name, amount, frequency, next_billing_date, account_id, category_id, counterparty_id, counterparty_name, is_active")
+        .select("id, name, amount, currency, currency_amount, frequency, next_billing_date, account_id, category_id, counterparty_id, counterparty_name, is_active")
         .eq("user_id", user.id)
         .order("next_billing_date", { ascending: true }),
       supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
@@ -91,9 +94,11 @@ export default function SubscriptionsPage() {
 
   function openEdit(sub: SubRow) {
     setEditId(sub.id);
+    const cur = sub.currency ?? "JPY";
     setForm({
       name: sub.name,
-      amount: String(sub.amount),
+      amount: cur !== "JPY" && sub.currency_amount ? String(sub.currency_amount) : String(sub.amount),
+      currency: cur,
       frequency: sub.frequency,
       next_billing_date: sub.next_billing_date,
       account_id: sub.account_id ?? "",
@@ -120,8 +125,8 @@ export default function SubscriptionsPage() {
     e.preventDefault();
     setErrorMsg("");
     if (!form.name.trim()) { setErrorMsg("名称を入力してください。"); return; }
-    const amt = Number(form.amount);
-    if (Number.isNaN(amt) || amt <= 0) { setErrorMsg("金額は1以上の数値で入力してください。"); return; }
+    const foreignAmt = Number(form.amount);
+    if (Number.isNaN(foreignAmt) || foreignAmt <= 0) { setErrorMsg("金額は1以上の数値で入力してください。"); return; }
     if (!form.next_billing_date) { setErrorMsg("次回請求日を入力してください。"); return; }
 
     setSaving(true);
@@ -129,9 +134,22 @@ export default function SubscriptionsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setErrorMsg("ログインが必要です。"); return; }
 
+      let jpyAmt = foreignAmt;
+      if (form.currency !== "JPY") {
+        try {
+          const rate = await fetchRateToJPY(form.currency, form.next_billing_date);
+          jpyAmt = Math.round(foreignAmt * rate);
+        } catch {
+          setErrorMsg("為替レートの取得に失敗しました。通貨を確認してください。");
+          return;
+        }
+      }
+
       const payload = {
         name: form.name.trim(),
-        amount: amt,
+        amount: jpyAmt,
+        currency: form.currency,
+        currency_amount: form.currency !== "JPY" ? foreignAmt : null,
         frequency: form.frequency,
         next_billing_date: form.next_billing_date,
         account_id: form.account_id || null,
@@ -192,8 +210,18 @@ export default function SubscriptionsPage() {
                 </div>
 
                 <div className="field">
-                  <label className="field-label">金額（円）</label>
-                  <input type="number" min="1" className="field-input" value={form.amount} onChange={(e) => setField("amount", e.target.value)} required />
+                  <label className="field-label">通貨</label>
+                  <select className="field-input" value={form.currency} onChange={(e) => setField("currency", e.target.value)}>
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.code} – {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label className="field-label">金額{form.currency !== "JPY" ? `（${CURRENCIES.find(c=>c.code===form.currency)?.symbol}）` : "（円）"}</label>
+                  <input type="number" min="0.01" step="any" className="field-input" value={form.amount} onChange={(e) => setField("amount", e.target.value)} required />
+                  {form.currency !== "JPY" && <div style={{ fontSize:11, color:"var(--text-3)", marginTop:3 }}>保存時に次回請求日のレートで円換算します</div>}
                 </div>
 
                 <div className="field">
@@ -289,7 +317,11 @@ export default function SubscriptionsPage() {
                     <tr key={sub.id} style={{ opacity: sub.is_active ? 1 : 0.45 }}>
                       <td style={{ fontWeight: 600 }}>{sub.name}</td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        <span className="amount-expense">{sub.amount.toLocaleString()} 円</span>
+                        <span className="amount-expense">
+                          {sub.currency && sub.currency !== "JPY" && sub.currency_amount
+                            ? <>{CURRENCIES.find(c=>c.code===sub.currency)?.symbol}{sub.currency_amount.toLocaleString()}<br/><span style={{fontSize:11,fontWeight:400}}>({sub.amount.toLocaleString()}円)</span></>
+                            : <>{sub.amount.toLocaleString()} 円</>}
+                        </span>
                       </td>
                       <td>{FREQ_LABELS[sub.frequency] ?? sub.frequency}</td>
                       <td style={{ whiteSpace: "nowrap" }}>{sub.next_billing_date}</td>

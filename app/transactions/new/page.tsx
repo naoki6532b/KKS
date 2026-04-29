@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeCardDueDate, firstDayOfMonth, type AccountRule } from "@/lib/money";
+import { CURRENCIES, fetchRateToJPY } from "@/lib/exchange";
 import { Header } from "@/app/components/header";
 
 type CategoryRow    = { id: string; kind: "income"|"expense"; name: string; is_favorite: boolean; sort_order: number };
@@ -38,6 +39,10 @@ export default function NewTransactionPage() {
   const [txDate, setTxDate]                   = useState(todayYmd());
   const [txType, setTxType]                   = useState<"income"|"expense">("expense");
   const [amount, setAmount]                   = useState("");
+  const [currency, setCurrency]               = useState("JPY");
+  const [exchangeRate, setExchangeRate]       = useState<number | null>(null);
+  const [rateFetching, setRateFetching]       = useState(false);
+  const [rateError, setRateError]             = useState("");
   const [itemName, setItemName]               = useState("");
   const [categoryId, setCategoryId]           = useState("");
   const [counterpartyId, setCounterpartyId]   = useState("");
@@ -51,7 +56,6 @@ export default function NewTransactionPage() {
       setLoading(true);
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) { router.push("/login"); router.refresh(); return; }
-
       const [{ data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }] = await Promise.all([
         supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
         supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order, default_category_id").eq("is_active", true),
@@ -68,6 +72,24 @@ export default function NewTransactionPage() {
     return () => { mounted = false; };
   }, [router, supabase]);
 
+  useEffect(() => {
+    if (currency === "JPY") { setExchangeRate(1); setRateError(""); return; }
+    if (!txDate) return;
+    let cancelled = false;
+    setRateFetching(true);
+    setRateError("");
+    setExchangeRate(null);
+    fetchRateToJPY(currency, txDate).then((rate) => {
+      if (!cancelled) { setExchangeRate(rate); setRateFetching(false); }
+    }).catch((err: Error) => {
+      if (!cancelled) { setRateError(err.message); setRateFetching(false); }
+    });
+    return () => { cancelled = true; };
+  }, [currency, txDate]);
+
+  const foreignAmount = Number(amount);
+  const jpyAmount = currency === "JPY" ? foreignAmount : (exchangeRate ? Math.round(foreignAmount * exchangeRate) : null);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
@@ -75,19 +97,24 @@ export default function NewTransactionPage() {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) { router.push("/login"); router.refresh(); return; }
-      const numericAmount = Number(amount);
       if (!txDate) { setErrorMessage("日付を入力してください。"); return; }
-      if (Number.isNaN(numericAmount) || numericAmount <= 0) { setErrorMessage("金額は1以上の数値で入力してください。"); return; }
+      if (Number.isNaN(foreignAmount) || foreignAmount <= 0) { setErrorMessage("金額は1以上の数値で入力してください。"); return; }
+      if (currency !== "JPY" && !exchangeRate) { setErrorMessage("為替レートの取得を待ってください。"); return; }
       if (!accountId) { setErrorMessage("現金/銀行/カードを選択してください。"); return; }
       const selectedAccount = accounts.find((x) => x.id === accountId);
       if (!selectedAccount) { setErrorMessage("選択された支払方法が見つかりません。"); return; }
+      const finalJpy = jpyAmount ?? 0;
+      if (finalJpy <= 0) { setErrorMessage("円換算後の金額が0以下になっています。"); return; }
       const cardDueDate = txType === "expense" ? computeCardDueDate(txDate, selectedAccount as AccountRule) : null;
       const { error } = await supabase.from("transactions").insert({
         user_id: user.id, tx_date: txDate, target_month: firstDayOfMonth(txDate),
-        tx_type: txType, amount: numericAmount,
+        tx_type: txType, amount: finalJpy,
+        currency, currency_amount: currency !== "JPY" ? foreignAmount : null,
+        exchange_rate: currency !== "JPY" ? exchangeRate : null,
         category_id: categoryId || null, counterparty_id: counterpartyId || null,
         counterparty_name: counterpartyName.trim() || null,
-        account_id: accountId, item_name: itemName.trim() || null, memo: memo.trim() || null, card_due_date: cardDueDate,
+        account_id: accountId, item_name: itemName.trim() || null,
+        memo: memo.trim() || null, card_due_date: cardDueDate,
       });
       if (error) { setErrorMessage(error.message); return; }
       router.push("/transactions");
@@ -101,6 +128,7 @@ export default function NewTransactionPage() {
 
   const filteredCategories    = categories.filter((x) => x.kind === txType);
   const filteredCounterparties = counterparties.filter((x) => x.kind === txType || x.kind === "both");
+  const currencyInfo = CURRENCIES.find((c) => c.code === currency);
 
   return (
     <>
@@ -109,11 +137,9 @@ export default function NewTransactionPage() {
         <div className="page-heading">
           <h1 className="page-title">出入金入力</h1>
         </div>
-
         <div className="card">
           <div className="card-body">
             {errorMessage && <div className="alert alert-error">{errorMessage}</div>}
-
             <form onSubmit={handleSubmit} className="form-grid">
               <div className="field">
                 <label className="field-label">日付</label>
@@ -122,19 +148,45 @@ export default function NewTransactionPage() {
 
               <div className="field">
                 <label className="field-label">種別</label>
-                <select
-                  value={txType}
-                  onChange={(e) => { setTxType(e.target.value as "income"|"expense"); setCategoryId(""); setCounterpartyId(""); }}
-                  className="field-input"
-                >
+                <select value={txType} onChange={(e) => { setTxType(e.target.value as "income"|"expense"); setCategoryId(""); setCounterpartyId(""); }} className="field-input">
                   <option value="expense">出金</option>
                   <option value="income">入金</option>
                 </select>
               </div>
 
               <div className="field">
-                <label className="field-label">金額（円）</label>
-                <input type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} required className="field-input" placeholder="例: 3500" />
+                <label className="field-label">通貨</label>
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="field-input">
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.code} – {c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label className="field-label">
+                  金額{currencyInfo && currency !== "JPY" ? `（${currencyInfo.symbol}）` : "（円）"}
+                </label>
+                <input
+                  type="number" min="0.01" step="any" value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required className="field-input"
+                  placeholder={currency === "JPY" ? "例: 3500" : `例: 29.99`}
+                />
+                {currency !== "JPY" && (
+                  <div style={{ marginTop: 4, fontSize: 12, color: rateError ? "var(--red)" : "var(--text-3)" }}>
+                    {rateFetching && "為替レート取得中..."}
+                    {rateError && rateError}
+                    {!rateFetching && !rateError && exchangeRate && (
+                      <>
+                        1 {currency} = {Math.round(exchangeRate).toLocaleString()} 円
+                        {amount && !Number.isNaN(foreignAmount) && foreignAmount > 0 && (
+                          <> &nbsp;→&nbsp; <strong style={{ color: "var(--sapphire)" }}>≈ {(jpyAmount ?? 0).toLocaleString()} 円</strong></>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="field">
@@ -146,9 +198,7 @@ export default function NewTransactionPage() {
                 <label className="field-label">科目</label>
                 <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="field-input">
                   <option value="">未選択</option>
-                  {filteredCategories.map((r) => (
-                    <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}{r.name}</option>
-                  ))}
+                  {filteredCategories.map((r) => <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}{r.name}</option>)}
                 </select>
               </div>
 
@@ -160,16 +210,12 @@ export default function NewTransactionPage() {
                     const v = e.target.value;
                     setCounterpartyId(v);
                     const sel = filteredCounterparties.find((x) => x.id === v);
-                    if (sel?.default_category_id && filteredCategories.some((x) => x.id === sel.default_category_id)) {
-                      setCategoryId(sel.default_category_id);
-                    }
+                    if (sel?.default_category_id && filteredCategories.some((x) => x.id === sel.default_category_id)) setCategoryId(sel.default_category_id);
                   }}
                   className="field-input"
                 >
                   <option value="">未選択</option>
-                  {filteredCounterparties.map((r) => (
-                    <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}{r.name}</option>
-                  ))}
+                  {filteredCounterparties.map((r) => <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}{r.name}</option>)}
                 </select>
               </div>
 
@@ -182,9 +228,7 @@ export default function NewTransactionPage() {
                 <label className="field-label">現金 / 銀行 / カード</label>
                 <select value={accountId} onChange={(e) => setAccountId(e.target.value)} required className="field-input">
                   <option value="">選択してください</option>
-                  {accounts.map((r) => (
-                    <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}[{r.account_type}] {r.name}</option>
-                  ))}
+                  {accounts.map((r) => <option key={r.id} value={r.id}>{r.is_favorite ? "★ " : ""}[{r.account_type}] {r.name}</option>)}
                 </select>
               </div>
 
@@ -193,8 +237,8 @@ export default function NewTransactionPage() {
                 <textarea rows={3} value={memo} onChange={(e) => setMemo(e.target.value)} className="field-input" style={{ resize: "vertical" }} />
               </div>
 
-              <button type="submit" disabled={loading || saving} className="btn btn-primary btn-lg">
-                {loading ? "読込中..." : saving ? "保存中..." : "保存する"}
+              <button type="submit" disabled={loading || saving || rateFetching} className="btn btn-primary btn-lg">
+                {loading ? "読込中..." : saving ? "保存中..." : rateFetching ? "レート取得中..." : "保存する"}
               </button>
             </form>
           </div>
