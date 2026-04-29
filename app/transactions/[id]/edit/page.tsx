@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { computeCardDueDate, firstDayOfMonth, type AccountRule } from "@/lib/money";
 import { CURRENCIES, fetchRateToJPY } from "@/lib/exchange";
 import { Header } from "@/app/components/header";
+import { ComboInput } from "@/app/components/combo-input";
 
 type CategoryRow     = { id: string; kind: "income"|"expense"; name: string; is_favorite: boolean; sort_order: number };
 type CounterpartyRow = { id: string; kind: "income"|"expense"|"both"; name: string; is_favorite: boolean; sort_order: number; default_category_id: string|null };
@@ -33,6 +34,7 @@ export default function EditTransactionPage() {
   const [categories, setCategories]         = useState<CategoryRow[]>([]);
   const [counterparties, setCounterparties] = useState<CounterpartyRow[]>([]);
   const [accounts, setAccounts]             = useState<AccountRow[]>([]);
+  const [pastCpNames, setPastCpNames]       = useState<string[]>([]);
 
   const [txDate, setTxDate]                   = useState("");
   const [txType, setTxType]                   = useState<"income"|"expense">("expense");
@@ -55,11 +57,12 @@ export default function EditTransactionPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) { router.push("/login"); router.refresh(); return; }
 
-      const [{ data: txData, error: txError }, { data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }] = await Promise.all([
+      const [{ data: txData, error: txError }, { data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }, { data: nameData }] = await Promise.all([
         supabase.from("transactions").select("id, tx_date, tx_type, amount, currency, currency_amount, item_name, category_id, counterparty_id, counterparty_name, account_id, memo").eq("id", txId).eq("user_id", user.id).single(),
         supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
         supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order, default_category_id").eq("is_active", true),
         supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order, close_day_type, close_day, pay_month_offset, pay_day_type, pay_day").eq("is_active", true),
+        supabase.from("transactions").select("counterparty_name").not("counterparty_name", "is", null).eq("user_id", user.id),
       ]);
       if (!mounted) return;
       if (txError || catError || cpError || accError) {
@@ -83,6 +86,7 @@ export default function EditTransactionPage() {
       setCategories([...(catData ?? [])].sort(compareRows) as CategoryRow[]);
       setCounterparties([...(cpData ?? [])].sort(compareRows) as CounterpartyRow[]);
       setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
+      setPastCpNames([...new Set((nameData ?? []).map((r: { counterparty_name: string | null }) => r.counterparty_name).filter(Boolean))] as string[]);
       setLoading(false);
     }
     loadData();
@@ -237,7 +241,7 @@ export default function EditTransactionPage() {
 
               <div className="field">
                 <label className="field-label">相手先名 <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
-                <input type="text" value={counterpartyName} onChange={(e) => setCounterpartyName(e.target.value)} className="field-input" placeholder="例: イオン、東京電力" />
+                <ComboInput value={counterpartyName} onChange={setCounterpartyName} suggestions={pastCpNames} placeholder="例: イオン、東京電力" className="field-input" />
               </div>
 
               <div className="field">

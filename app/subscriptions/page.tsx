@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { CURRENCIES, fetchRateToJPY } from "@/lib/exchange";
 import { Header } from "@/app/components/header";
+import { ComboInput } from "@/app/components/combo-input";
 
 type CategoryRow     = { id: string; kind: "income" | "expense"; name: string; is_favorite: boolean; sort_order: number };
 type AccountRow      = { id: string; account_type: "cash" | "bank" | "card"; name: string; is_favorite: boolean; sort_order: number };
@@ -52,6 +53,7 @@ export default function SubscriptionsPage() {
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
   const [errorMsg, setErrorMsg]         = useState("");
+  const [pastCpNames, setPastCpNames]   = useState<string[]>([]);
 
   const [editId, setEditId]     = useState<string | null>(null);
   const [form, setForm]         = useState(EMPTY_FORM);
@@ -67,7 +69,7 @@ export default function SubscriptionsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [{ data: subData, error: subErr }, { data: catData }, { data: accData }, { data: cpData }] = await Promise.all([
+    const [{ data: subData, error: subErr }, { data: catData }, { data: accData }, { data: cpData }, { data: nameData }] = await Promise.all([
       supabase.from("subscriptions")
         .select("id, name, amount, currency, currency_amount, frequency, next_billing_date, account_id, category_id, counterparty_id, counterparty_name, is_active")
         .eq("user_id", user.id)
@@ -75,6 +77,7 @@ export default function SubscriptionsPage() {
       supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
       supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order").eq("is_active", true),
       supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
+      supabase.from("transactions").select("counterparty_name").not("counterparty_name", "is", null).eq("user_id", user.id),
     ]);
 
     if (subErr) { setErrorMsg(`取得エラー: ${subErr.message}`); setLoading(false); return; }
@@ -82,6 +85,7 @@ export default function SubscriptionsPage() {
     setCategories([...(catData ?? [])].filter((x) => x.kind === "expense").sort(compareRows) as CategoryRow[]);
     setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
     setCounterparties([...(cpData ?? [])].filter((x) => x.kind === "expense" || x.kind === "both").sort(compareRows) as CounterpartyRow[]);
+    setPastCpNames([...new Set((nameData ?? []).map((r: { counterparty_name: string | null }) => r.counterparty_name).filter(Boolean))] as string[]);
     setLoading(false);
   }
 
@@ -273,7 +277,7 @@ export default function SubscriptionsPage() {
 
                 <div className="field">
                   <label className="field-label">相手先名 <span style={{ fontWeight: 400, color: "var(--text-4)", fontSize: 11 }}>（任意）</span></label>
-                  <input type="text" className="field-input" value={form.counterparty_name} onChange={(e) => setField("counterparty_name", e.target.value)} placeholder="例: Netflix Japan" />
+                  <ComboInput value={form.counterparty_name} onChange={(v) => setField("counterparty_name", v)} suggestions={pastCpNames} placeholder="例: Netflix Japan" className="field-input" />
                 </div>
 
                 <div className="btn-group">
