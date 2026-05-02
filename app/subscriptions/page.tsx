@@ -15,6 +15,7 @@ type SubRow = {
   amount: number;
   currency: string;
   currency_amount: number | null;
+  tx_type: "income" | "expense";
   frequency: string;
   next_billing_date: string;
   account_id: string | null;
@@ -41,7 +42,7 @@ function compareRows<T extends { is_favorite?: boolean; sort_order?: number; nam
   return (a.name ?? "").localeCompare(b.name ?? "", "ja");
 }
 
-const EMPTY_FORM = { name: "", amount: "", currency: "JPY", frequency: "monthly", next_billing_date: "", account_id: "", category_id: "", counterparty_id: "", counterparty_name: "" };
+const EMPTY_FORM = { name: "", amount: "", currency: "JPY", tx_type: "expense", frequency: "monthly", next_billing_date: "", account_id: "", category_id: "", counterparty_id: "", counterparty_name: "" };
 
 export default function SubscriptionsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -82,7 +83,7 @@ export default function SubscriptionsPage() {
 
     if (subErr) { setErrorMsg(`取得エラー: ${subErr.message}`); setLoading(false); return; }
     setSubs((subData ?? []) as SubRow[]);
-    setCategories([...(catData ?? [])].filter((x) => x.kind === "expense").sort(compareRows) as CategoryRow[]);
+    setCategories([...(catData ?? [])].sort(compareRows) as CategoryRow[]);
     setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
     setCounterparties([...(cpData ?? [])].filter((x) => x.kind === "expense" || x.kind === "both").sort(compareRows) as CounterpartyRow[]);
     setPastCpNames([...new Set((nameData ?? []).map((r: { counterparty_name: string | null }) => r.counterparty_name).filter(Boolean))] as string[]);
@@ -103,6 +104,7 @@ export default function SubscriptionsPage() {
       name: sub.name,
       amount: cur !== "JPY" && sub.currency_amount ? String(sub.currency_amount) : String(sub.amount),
       currency: cur,
+      tx_type: sub.tx_type ?? "expense",
       frequency: sub.frequency,
       next_billing_date: sub.next_billing_date,
       account_id: sub.account_id ?? "",
@@ -154,6 +156,7 @@ export default function SubscriptionsPage() {
         amount: jpyAmt,
         currency: form.currency,
         currency_amount: form.currency !== "JPY" ? foreignAmt : null,
+        tx_type: form.tx_type,
         frequency: form.frequency,
         next_billing_date: form.next_billing_date,
         account_id: form.account_id || null,
@@ -214,6 +217,14 @@ export default function SubscriptionsPage() {
                 </div>
 
                 <div className="field">
+                  <label className="field-label">種別</label>
+                  <select className="field-input" value={form.tx_type} onChange={(e) => setField("tx_type", e.target.value)}>
+                    <option value="expense">出金（支出）</option>
+                    <option value="income">入金（収入）</option>
+                  </select>
+                </div>
+
+                <div className="field">
                   <label className="field-label">通貨</label>
                   <select className="field-input" value={form.currency} onChange={(e) => setField("currency", e.target.value)}>
                     {CURRENCIES.map((c) => (
@@ -259,7 +270,7 @@ export default function SubscriptionsPage() {
                   <label className="field-label">科目 <span style={{ fontWeight: 400, color: "var(--text-4)", fontSize: 11 }}>（任意）</span></label>
                   <select className="field-input" value={form.category_id} onChange={(e) => setField("category_id", e.target.value)}>
                     <option value="">未選択</option>
-                    {categories.map((c) => (
+                    {categories.filter((c) => c.kind === form.tx_type).map((c) => (
                       <option key={c.id} value={c.id}>{c.is_favorite ? "★ " : ""}{c.name}</option>
                     ))}
                   </select>
@@ -305,6 +316,7 @@ export default function SubscriptionsPage() {
                 <thead>
                   <tr>
                     <th>名称</th>
+                    <th>種別</th>
                     <th style={{ textAlign: "right" }}>金額</th>
                     <th>頻度</th>
                     <th>次回請求日</th>
@@ -320,6 +332,11 @@ export default function SubscriptionsPage() {
                   {subs.map((sub) => (
                     <tr key={sub.id} style={{ opacity: sub.is_active ? 1 : 0.45 }}>
                       <td style={{ fontWeight: 600 }}>{sub.name}</td>
+                      <td>
+                        <span className={sub.tx_type === "income" ? "badge badge-income" : "badge badge-expense"}>
+                          {sub.tx_type === "income" ? "入金" : "出金"}
+                        </span>
+                      </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <span className="amount-expense">
                           {sub.currency && sub.currency !== "JPY" && sub.currency_amount

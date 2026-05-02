@@ -68,7 +68,7 @@ export function SubscriptionSync() {
               user_id: user.id,
               tx_date: billingDate,
               target_month: firstDayOfMonth(billingDate),
-              tx_type: "expense",
+              tx_type: sub.tx_type ?? "expense",
               amount: jpyAmount,
               currency,
               currency_amount: currency !== "JPY" ? currencyAmount : null,
