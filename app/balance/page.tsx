@@ -198,8 +198,24 @@ function CustomTooltip({ active, payload, label, cats }: {
 
 // ── budget bar ──────────────────────────────────────────────────────
 
-function BudgetBar({ expense, budget }: { expense: number; budget: number }) {
-  if (budget <= 0) return null;
+function BudgetBar({ expense, budget, loading }: { expense: number; budget: number; loading: boolean }) {
+  if (loading) return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-header"><h2 className="card-title">予算達成状況</h2></div>
+      <div className="card-body">
+        <div style={{ height: 60, background: "var(--surface-2)", borderRadius: 8, animation: "pulse 1.5s ease-in-out infinite" }} />
+      </div>
+    </div>
+  );
+  if (budget <= 0) return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-header"><h2 className="card-title">予算達成状況</h2></div>
+      <div className="card-body" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, padding:"20px 0" }}>
+        <span style={{ color:"var(--text-3)", fontSize:13 }}>この月の予算が設定されていません</span>
+        <a href="/budgets" className="btn btn-secondary" style={{ fontSize:12, padding:"5px 14px" }}>予算を設定 →</a>
+      </div>
+    </div>
+  );
   const over     = expense > budget;
   const scale    = Math.max(expense, budget) * 1.18;
   const greenPct = Math.min(expense, budget) / scale * 100;
@@ -440,7 +456,7 @@ export default function BalancePage() {
         </div>
 
         {/* Budget bar */}
-        {!loading && <BudgetBar expense={monthExpense} budget={budget} />}
+        <BudgetBar expense={monthExpense} budget={budget} loading={loading} />
 
         {/* Pie charts */}
         {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0) && (
