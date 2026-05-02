@@ -318,6 +318,7 @@ export default function BalancePage() {
     let mounted = true;
     async function loadData() {
       setLoading(true);
+      try {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) { router.push("/login"); router.refresh(); return; }
 
@@ -327,7 +328,7 @@ export default function BalancePage() {
       const [
         { data: prevRows },
         { data: curRows },
-        { data: budgetRow },
+        { data: budgetRow, error: budgetError },
         { data: catRows },
         { data: cpRows },
       ] = await Promise.all([
@@ -337,6 +338,9 @@ export default function BalancePage() {
         supabase.from("categories").select("id, name, kind").eq("is_active", true),
         supabase.from("counterparties").select("id, name").eq("is_active", true),
       ]);
+
+      if (budgetError) console.error("[balance] budget query error:", budgetError);
+      console.log("[balance] budgetRow:", budgetRow, "for month:", monthStart);
 
       if (!mounted) return;
 
@@ -357,7 +361,11 @@ export default function BalancePage() {
       setCatData(buildCategoryData(cur, allCats, monthStart));
       setCpNamePie(buildCpNamePie(cur));
       setCpGenrePie(buildCpGenrePie(cur, cpMap));
-      setLoading(false);
+      } catch (err) {
+        console.error("[balance] loadData error:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
     loadData();
     return () => { mounted = false; };
