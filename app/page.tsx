@@ -5,6 +5,7 @@ import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
 import { DueList, type DueRow } from "@/app/components/due-list";
 import { SubscriptionSync } from "@/app/components/subscription-sync";
+import { BudgetBar } from "@/app/components/budget-bar";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -91,6 +92,8 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
+
+        <BudgetBar expense={expenseTotal} budget={budget} />
 
         <div className="card">
           <div className="card-header">
