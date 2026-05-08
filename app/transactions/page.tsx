@@ -12,7 +12,7 @@ export default async function TransactionsPage() {
 
   const { data: rows, error } = await supabase
     .from("transactions")
-    .select("id, tx_date, tx_type, amount, currency, currency_amount, exchange_rate, item_name, counterparty_name, memo, categories(name), counterparties(name), accounts(name)")
+    .select("id, tx_date, tx_type, amount, currency, currency_amount, exchange_rate, item_name, counterparty_name, memo, has_tax, tax_amount, categories(name), counterparties(name), accounts(name)")
     .order("tx_date", { ascending: true })
     .order("created_at", { ascending: true })
     .limit(500);

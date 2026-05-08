@@ -15,6 +15,8 @@ export type TxRow = {
   item_name?: string | null;
   counterparty_name?: string | null;
   memo?: string | null;
+  has_tax?: boolean | null;
+  tax_amount?: number | null;
   categories: { name?: string } | null;
   counterparties: { name?: string } | null;
   accounts: { name?: string } | null;
@@ -146,6 +148,7 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                         <td style={{ whiteSpace: "nowrap" }}>{row.counterparty_name ?? "—"}</td>
                         <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
                           {row.item_name ?? ""}
+                          {row.has_tax && <span style={{ marginLeft:4, fontSize:10, background:"var(--sapphire-light)", color:"var(--sapphire)", borderRadius:4, padding:"1px 4px", fontWeight:600, verticalAlign:"middle" }}>税</span>}
                         </td>
                         <td>{row.accounts?.name ?? "—"}</td>
                         <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>

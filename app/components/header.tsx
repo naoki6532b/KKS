@@ -14,6 +14,7 @@ export function Header() {
         <Link href="/balance" className="site-nav-link">収支</Link>
         <Link href="/subscriptions" className="site-nav-link">サブスク</Link>
         <Link href="/budgets" className="site-nav-link">月度予算</Link>
+        <Link href="/settings" className="site-nav-link">設定</Link>
         <Link href="/masters" className="site-nav-link">マスタ管理</Link>
         <form action="/logout" method="post" style={{ margin: 0 }}>
           <button type="submit" className="site-nav-logout">ログアウト</button>

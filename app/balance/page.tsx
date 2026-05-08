@@ -19,7 +19,7 @@ const EXPENSE_COLORS = ["#f87171","#fb923c","#fbbf24","#e879f9","#f472b6","#c084
 
 function getCurrentMonth() {
   const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"00")}`;
 }
 
 function shiftMonth(ym: string, delta: number): string {
@@ -34,27 +34,33 @@ const PIE_COLORS = ["#f87171","#fb923c","#fbbf24","#4ade80","#60a5fa","#a78bfa",
 
 type CategoryMeta = { id: string; name: string; kind: "income"|"expense" };
 type CpMeta = { id: string; name: string };
-type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null };
+type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null; has_tax?: boolean|null; tax_amount?: number|null };
 
 type PieSlice = { name: string; value: number };
 
 function buildCpNamePie(txRows: TxRow[]): PieSlice[] {
   const map = new Map<string, number>();
+  let totalTax = 0;
   for (const tx of txRows) {
     if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
     const key = tx.counterparty_name?.trim() || "未設定";
     map.set(key, (map.get(key) ?? 0) + tx.amount);
+    if (tx.has_tax && tx.tax_amount && tx.tax_amount > 0) totalTax += tx.tax_amount;
   }
+  if (totalTax > 0) map.set("消費税", (map.get("消費税") ?? 0) + totalTax);
   return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
 function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[] {
   const map = new Map<string, number>();
+  let totalTax = 0;
   for (const tx of txRows) {
     if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
     const key = tx.counterparty_id ? (cpMap.get(tx.counterparty_id) ?? "未設定") : "未設定";
     map.set(key, (map.get(key) ?? 0) + tx.amount);
+    if (tx.has_tax && tx.tax_amount && tx.tax_amount > 0) totalTax += tx.tax_amount;
   }
+  if (totalTax > 0) map.set("税金", (map.get("税金") ?? 0) + totalTax);
   return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
@@ -107,7 +113,6 @@ function buildCategoryData(txRows: TxRow[], cats: CategoryMeta[], monthStart: st
     const prev = e.byCat.get(cid) ?? 0;
     e.byCat.set(cid, prev + (tx.tx_type === "income" ? tx.amount : -tx.amount));
   }
-  // initialise all category keys with 0
   const allKeys = cats.map((c) => c.id);
   allKeys.push("_inc_other", "_exp_other");
 
@@ -237,7 +242,7 @@ export default function BalancePage() {
         { data: cpRows },
       ] = await Promise.all([
         supabase.from("transactions").select("amount, tx_type").lt("tx_date", monthStart),
-        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name").gte("tx_date", monthStart).lt("tx_date", monthEnd),
+        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name, has_tax, tax_amount").gte("tx_date", monthStart).lt("tx_date", monthEnd),
         supabase.from("monthly_budgets").select("budget_amount").eq("target_month", monthStart).maybeSingle(),
         supabase.from("categories").select("id, name, kind").eq("is_active", true),
         supabase.from("counterparties").select("id, name").eq("is_active", true),
@@ -396,7 +401,6 @@ export default function BalancePage() {
           <div className="card-header">
             <h2 className="card-title">日次収支グラフ</h2>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-              {/* View toggle */}
               <div style={{ display:"flex", border:"1px solid var(--border-strong)", borderRadius:8, overflow:"hidden" }}>
                 {(["total","category"] as const).map((m) => (
                   <button
@@ -415,7 +419,6 @@ export default function BalancePage() {
                 ))}
               </div>
 
-              {/* Legend */}
               {mode === "total" ? (
                 <div style={{ display:"flex", gap:10, fontSize:11, color:"var(--text-3)", alignItems:"center" }}>
                   <span style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -480,10 +483,8 @@ export default function BalancePage() {
                     cursor={{ fill:"rgba(26,74,143,0.05)" }}
                   />
 
-                  {/* Center line */}
                   <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
 
-                  {/* Budget line */}
                   {budget>0 && (
                     <ReferenceLine
                       y={-budget}
@@ -497,7 +498,6 @@ export default function BalancePage() {
                     />
                   )}
 
-                  {/* ── Total mode ── */}
                   {mode === "total" && (
                     <>
                       <Bar dataKey="income" name="収入" maxBarSize={28} radius={[4,4,0,0]}>
@@ -511,7 +511,6 @@ export default function BalancePage() {
                     </>
                   )}
 
-                  {/* ── Category mode ── */}
                   {mode === "category" && (
                     <>
                       {incCats.map((c,i) => (
@@ -520,7 +519,6 @@ export default function BalancePage() {
                           radius={i===incCats.length-1 ? [4,4,0,0] : [0,0,0,0]}
                         />
                       ))}
-                      {/* uncategorized income */}
                       <Bar dataKey="_inc_other" name="未分類(収入)" stackId="income"
                         fill={INCOME_COLORS[incCats.length%INCOME_COLORS.length]} maxBarSize={28}
                         radius={[4,4,0,0]}
@@ -532,7 +530,6 @@ export default function BalancePage() {
                           radius={i===expCats.length-1 ? [0,0,4,4] : [0,0,0,0]}
                         />
                       ))}
-                      {/* uncategorized expense */}
                       <Bar dataKey="_exp_other" name="未分類(支出)" stackId="expense"
                         fill={EXPENSE_COLORS[expCats.length%EXPENSE_COLORS.length]} maxBarSize={28}
                         radius={[0,0,4,4]}
