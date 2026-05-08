@@ -49,7 +49,7 @@ export default function EditTransactionPage() {
   const [counterpartyName, setCounterpartyName] = useState("");
   const [accountId, setAccountId]             = useState("");
   const [memo, setMemo]                       = useState("");
-  const [hasTax, setHasTax]                   = useState(false);
+  const [hasTax, setHasTax]                   = useState(true);
   const [taxRate, setTaxRate]                 = useState(10);
 
   useEffect(() => {
