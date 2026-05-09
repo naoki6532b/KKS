@@ -74,8 +74,6 @@ function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: s
   );
 }
 
-// ── chart data builders ─────────────────────────────────────────────
-
 type DayBase = { name: string; isTotal: boolean; [k: string]: number|string|boolean };
 
 function initDays(monthStart: string): Map<string, { income: number; expense: number; byCat: Map<string,number> }> {
@@ -116,7 +114,7 @@ function buildCategoryData(txRows: TxRow[], cats: CategoryMeta[], monthStart: st
   const allKeys = cats.map((c) => c.id);
   allKeys.push("_inc_other", "_exp_other");
 
-  let totals: DayBase = { name: "月計", isTotal: true };
+  const totals: DayBase = { name: "月計", isTotal: true };
   allKeys.forEach((k) => { totals[k] = 0; });
 
   const result: DayBase[] = [];
@@ -132,8 +130,6 @@ function buildCategoryData(txRows: TxRow[], cats: CategoryMeta[], monthStart: st
   result.push(totals);
   return result;
 }
-
-// ── label renderers ─────────────────────────────────────────────────
 
 function fmtLabel(v: number): string {
   const a = Math.abs(v);
@@ -155,8 +151,6 @@ function ExpenseLabel(props: { x?: number; y?: number; width?: number; height?: 
   if (!txt) return null;
   return <text x={x+width/2} y={y+Math.abs(height)+11} textAnchor="middle" fontSize={9} fill="#dc2626" fontWeight={600}>{txt}</text>;
 }
-
-// ── tooltip ─────────────────────────────────────────────────────────
 
 function CustomTooltip({ active, payload, label, cats }: {
   active?: boolean;
@@ -201,8 +195,6 @@ function CustomTooltip({ active, payload, label, cats }: {
     </div>
   );
 }
-
-// ── main page ───────────────────────────────────────────────────────
 
 export default function BalancePage() {
   const router   = useRouter();
@@ -249,7 +241,6 @@ export default function BalancePage() {
       ]);
 
       if (budgetError) console.error("[balance] budget query error:", budgetError);
-      console.log("[balance] budgetRow:", budgetRow, "for month:", monthStart);
 
       if (!mounted) return;
 
@@ -298,7 +289,6 @@ export default function BalancePage() {
     <>
       <Header />
       <main className="page">
-        {/* Heading */}
         <div className="page-heading">
           <h1 className="page-title">収支バランス</h1>
           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -308,7 +298,6 @@ export default function BalancePage() {
           </div>
         </div>
 
-        {/* Summary cards */}
         <div className="stats-grid" style={{ gridTemplateColumns:"repeat(3, 1fr)" }}>
           <div className="stat-card">
             <div className="stat-label">前月繰越</div>
@@ -335,7 +324,7 @@ export default function BalancePage() {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">予算差額 <span style={{ fontSize:11, fontWeight:400, color:"var(--text-4)" }}>（予算－支出）</span></div>
+            <div className="stat-label">予算差額 <span style={{ fontSize:11, fontWeight:400, color:"var(--text-4)" }}>（予算−支出）</span></div>
             <div className="stat-value" style={{ color: budget===0 ? "var(--text-3)" : budgetVariance>=0 ? "var(--green)" : "var(--red)" }}>
               {budget > 0 ? <>{budgetVariance >= 0 ? "+" : ""}{budgetVariance.toLocaleString()}<span className="stat-value-unit">円</span></> : <span style={{ fontSize:16, color:"var(--text-3)" }}>—</span>}
             </div>
@@ -348,13 +337,10 @@ export default function BalancePage() {
           </div>
         </div>
 
-        {/* Budget bar */}
         <BudgetBar expense={monthExpense} budget={budget} loading={loading} />
 
-        {/* Pie charts */}
         {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0) && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
-            {/* 相手先名別 */}
             <div className="card">
               <div className="card-header"><h2 className="card-title">相手先名別 支出</h2></div>
               <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
@@ -374,7 +360,6 @@ export default function BalancePage() {
               </div>
             </div>
 
-            {/* 相手先ジャンル別 */}
             <div className="card">
               <div className="card-header"><h2 className="card-title">相手先ジャンル別 支出</h2></div>
               <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
@@ -396,7 +381,6 @@ export default function BalancePage() {
           </div>
         )}
 
-        {/* Chart card */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">日次収支グラフ</h2>

@@ -178,3 +178,14 @@ export function sumBySection(amounts: SlipItemAmounts, section: SalarySection): 
     .filter((it) => it.section === section)
     .reduce((sum, it) => sum + (amounts[it.key] ?? 0), 0);
 }
+
+export function summarizeSlipItems(items: { item_key: string; amount: number }[]): { payment: number; deduction: number; net: number } {
+  let payment = 0, deduction = 0;
+  for (const it of items) {
+    const def = SALARY_ITEM_MAP.get(it.item_key);
+    if (!def) continue;
+    if (def.section === "deduction") deduction += it.amount;
+    else payment += it.amount;
+  }
+  return { payment, deduction, net: payment - deduction };
+}
