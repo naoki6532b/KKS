@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
 import { BudgetBar } from "@/app/components/budget-bar";
+import { SALARY_ITEM_MAP } from "@/lib/salary";
 
 type ViewMode = "total" | "category";
 
@@ -34,7 +35,8 @@ const PIE_COLORS = ["#f87171","#fb923c","#fbbf24","#4ade80","#60a5fa","#a78bfa",
 
 type CategoryMeta = { id: string; name: string; kind: "income"|"expense" };
 type CpMeta = { id: string; name: string };
-type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null; has_tax?: boolean|null; tax_amount?: number|null };
+type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null; has_tax?: boolean|null; tax_amount?: number|null; salary_slip_id?: string|null };
+type SlipWithItems = { id: string; slip_date: string; salary_slip_items: { item_key: string; amount: number }[] };
 
 type PieSlice = { name: string; value: number };
 
@@ -232,30 +234,75 @@ export default function BalancePage() {
         { data: budgetRow, error: budgetError },
         { data: catRows },
         { data: cpRows },
+        { data: userSettings },
+        { data: slipsRaw },
       ] = await Promise.all([
         supabase.from("transactions").select("amount, tx_type").lt("tx_date", monthStart),
-        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name, has_tax, tax_amount").gte("tx_date", monthStart).lt("tx_date", monthEnd),
+        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name, has_tax, tax_amount, salary_slip_id").gte("tx_date", monthStart).lt("tx_date", monthEnd),
         supabase.from("monthly_budgets").select("budget_amount").eq("target_month", monthStart).maybeSingle(),
         supabase.from("categories").select("id, name, kind").eq("is_active", true),
         supabase.from("counterparties").select("id, name").eq("is_active", true),
+        supabase.from("user_settings").select("strict_display").eq("user_id", user.id).maybeSingle(),
+        supabase.from("salary_slips").select("id, slip_date, salary_slip_items(item_key, amount)").gte("slip_date", monthStart).lt("slip_date", monthEnd),
       ]);
 
       if (budgetError) console.error("[balance] budget query error:", budgetError);
 
       if (!mounted) return;
 
+      const strictDisplay = userSettings?.strict_display ?? false;
+      const slips = (slipsRaw ?? []) as unknown as SlipWithItems[];
+      const rawCur = (curRows ?? []) as TxRow[];
+
+      let cur: TxRow[];
+      let totalDeductions = 0;
+
+      if (strictDisplay) {
+        cur = rawCur;
+        for (const slip of slips) {
+          for (const it of slip.salary_slip_items) {
+            const def = SALARY_ITEM_MAP.get(it.item_key);
+            if (def?.section === "deduction") totalDeductions += it.amount;
+          }
+        }
+      } else {
+        const nonSalary = rawCur.filter((t) => !t.salary_slip_id);
+        const synth: TxRow[] = slips.map((slip) => {
+          let payment = 0, deduction = 0;
+          for (const it of slip.salary_slip_items) {
+            const def = SALARY_ITEM_MAP.get(it.item_key);
+            if (!def) continue;
+            if (def.section === "deduction") deduction += it.amount;
+            else payment += it.amount;
+          }
+          return {
+            tx_date: slip.slip_date,
+            tx_type: "income" as const,
+            amount: payment - deduction,
+            category_id: null,
+            counterparty_id: null,
+            counterparty_name: null,
+            has_tax: false,
+            tax_amount: null,
+          };
+        });
+        cur = [...nonSalary, ...synth];
+      }
+
       const prev     = prevRows ?? [];
       const prevBal  = prev.reduce((s,t) => s + (t.tx_type==="income" ? t.amount : -t.amount), 0);
-      const cur      = (curRows ?? []) as TxRow[];
       const income   = cur.filter(t=>t.tx_type==="income").reduce((s,t)=>s+t.amount, 0);
       const expense  = cur.filter(t=>t.tx_type==="expense").reduce((s,t)=>s+t.amount, 0);
       const allCats  = (catRows ?? []) as CategoryMeta[];
       const cpMap    = new Map<string, string>((cpRows ?? []).map((c: CpMeta) => [c.id, c.name]));
 
+      const rawBudget = budgetRow?.budget_amount ?? 0;
+      const adjustedBudget = strictDisplay ? rawBudget + totalDeductions : rawBudget;
+
       setCarryover(prevBal);
       setMonthIncome(income);
       setMonthExpense(expense);
-      setBudget(budgetRow?.budget_amount ?? 0);
+      setBudget(adjustedBudget);
       setCats(allCats);
       setTotalData(buildTotalData(cur, monthStart));
       setCatData(buildCategoryData(cur, allCats, monthStart));
@@ -330,7 +377,7 @@ export default function BalancePage() {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">翌月繰越</div>
+            <div className="stat-label">翼月繰越</div>
             <div className="stat-value" style={{ color: nextCarryover>=0 ? "var(--sapphire)" : "var(--red)" }}>
               {nextCarryover.toLocaleString()}<span className="stat-value-unit">円</span>
             </div>
