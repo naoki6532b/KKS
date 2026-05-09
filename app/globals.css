@@ -113,9 +113,9 @@ body {
 
 /* ─── Page layout ─────────────────────────────────────── */
 .page {
-  max-width: 1060px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 28px 20px;
+  padding: 28px 24px;
 }
 
 .page-sm {
@@ -350,8 +350,10 @@ body {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  min-width: 900px;
+  min-width: 720px;
 }
+
+.table th, .table td { white-space: nowrap; }
 
 .table thead tr {
   background: var(--surface-2);
@@ -636,8 +638,6 @@ body {
   .due-item { grid-template-columns: auto 1fr; }
   .due-account { display: none; }
   .login-card { padding: 28px 20px; }
-  /* テーブルセルの折り返し防止 */
-  .table td { white-space: nowrap; }
   /* スマホで不要な列を非表示 */
   .col-sp-hide { display: none; }
 }

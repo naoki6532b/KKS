@@ -127,15 +127,15 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th style={{ minWidth: 95 }}>日付</th>
-                      <th style={{ minWidth: 100 }}>科目</th>
-                      <th className="col-sp-hide" style={{ minWidth: 110 }}>相手先ジャンル</th>
-                      <th style={{ minWidth: 110 }}>相手先名</th>
-                      <th style={{ minWidth: 120 }}>品名 / 名称</th>
-                      <th className="col-sp-hide" style={{ minWidth: 90 }}>口座</th>
-                      <th className="col-sp-hide" style={{ minWidth: 120 }}>メモ</th>
-                      <th style={{ textAlign: "right", minWidth: 90 }}>入金</th>
-                      <th style={{ textAlign: "right", minWidth: 90 }}>出金</th>
+                      <th>日付</th>
+                      <th>科目</th>
+                      <th className="col-sp-hide">相手先ジャンル</th>
+                      <th>相手先名</th>
+                      <th>品名 / 名称</th>
+                      <th className="col-sp-hide">口座</th>
+                      <th className="col-sp-hide">メモ</th>
+                      <th style={{ textAlign: "right" }}>入金</th>
+                      <th style={{ textAlign: "right" }}>出金</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -146,12 +146,12 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                         <td style={{ whiteSpace: "nowrap" }}>{row.categories?.name ?? "—"}</td>
                         <td className="col-sp-hide">{row.counterparties?.name ?? "—"}</td>
                         <td style={{ whiteSpace: "nowrap" }}>{row.counterparty_name ?? "—"}</td>
-                        <td style={{ minWidth: 120, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
+                        <td style={{ whiteSpace: "nowrap", color: "var(--text-2)" }}>
                           {row.item_name ?? ""}
                           {row.has_tax && <span style={{ marginLeft:4, fontSize:10, background:"var(--sapphire-light)", color:"var(--sapphire)", borderRadius:4, padding:"1px 4px", fontWeight:600, verticalAlign:"middle" }}>税</span>}
                         </td>
                         <td className="col-sp-hide">{row.accounts?.name ?? "—"}</td>
-                        <td className="col-sp-hide" style={{ minWidth: 120, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>
+                        <td className="col-sp-hide" style={{ whiteSpace: "nowrap", color: "var(--text-3)" }}>
                           {row.memo ?? ""}
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
