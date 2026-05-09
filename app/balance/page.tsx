@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
+import { BudgetBar } from "@/app/components/budget-bar";
 
 type ViewMode = "total" | "category";
 
@@ -18,7 +19,7 @@ const EXPENSE_COLORS = ["#f87171","#fb923c","#fbbf24","#e879f9","#f472b6","#c084
 
 function getCurrentMonth() {
   const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"00")}`;
 }
 
 function shiftMonth(ym: string, delta: number): string {
@@ -33,27 +34,33 @@ const PIE_COLORS = ["#f87171","#fb923c","#fbbf24","#4ade80","#60a5fa","#a78bfa",
 
 type CategoryMeta = { id: string; name: string; kind: "income"|"expense" };
 type CpMeta = { id: string; name: string };
-type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null };
+type TxRow = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null; has_tax?: boolean|null; tax_amount?: number|null };
 
 type PieSlice = { name: string; value: number };
 
 function buildCpNamePie(txRows: TxRow[]): PieSlice[] {
   const map = new Map<string, number>();
+  let totalTax = 0;
   for (const tx of txRows) {
     if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
     const key = tx.counterparty_name?.trim() || "未設定";
     map.set(key, (map.get(key) ?? 0) + tx.amount);
+    if (tx.has_tax && tx.tax_amount && tx.tax_amount > 0) totalTax += tx.tax_amount;
   }
+  if (totalTax > 0) map.set("消費税", (map.get("消費税") ?? 0) + totalTax);
   return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
 function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[] {
   const map = new Map<string, number>();
+  let totalTax = 0;
   for (const tx of txRows) {
     if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
     const key = tx.counterparty_id ? (cpMap.get(tx.counterparty_id) ?? "未設定") : "未設定";
     map.set(key, (map.get(key) ?? 0) + tx.amount);
+    if (tx.has_tax && tx.tax_amount && tx.tax_amount > 0) totalTax += tx.tax_amount;
   }
+  if (totalTax > 0) map.set("税金", (map.get("税金") ?? 0) + totalTax);
   return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
@@ -66,8 +73,6 @@ function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: s
     </div>
   );
 }
-
-// ── chart data builders ─────────────────────────────────────────────
 
 type DayBase = { name: string; isTotal: boolean; [k: string]: number|string|boolean };
 
@@ -106,11 +111,10 @@ function buildCategoryData(txRows: TxRow[], cats: CategoryMeta[], monthStart: st
     const prev = e.byCat.get(cid) ?? 0;
     e.byCat.set(cid, prev + (tx.tx_type === "income" ? tx.amount : -tx.amount));
   }
-  // initialise all category keys with 0
   const allKeys = cats.map((c) => c.id);
   allKeys.push("_inc_other", "_exp_other");
 
-  let totals: DayBase = { name: "月計", isTotal: true };
+  const totals: DayBase = { name: "月計", isTotal: true };
   allKeys.forEach((k) => { totals[k] = 0; });
 
   const result: DayBase[] = [];
@@ -126,8 +130,6 @@ function buildCategoryData(txRows: TxRow[], cats: CategoryMeta[], monthStart: st
   result.push(totals);
   return result;
 }
-
-// ── label renderers ─────────────────────────────────────────────────
 
 function fmtLabel(v: number): string {
   const a = Math.abs(v);
@@ -149,8 +151,6 @@ function ExpenseLabel(props: { x?: number; y?: number; width?: number; height?: 
   if (!txt) return null;
   return <text x={x+width/2} y={y+Math.abs(height)+11} textAnchor="middle" fontSize={9} fill="#dc2626" fontWeight={600}>{txt}</text>;
 }
-
-// ── tooltip ─────────────────────────────────────────────────────────
 
 function CustomTooltip({ active, payload, label, cats }: {
   active?: boolean;
@@ -196,121 +196,6 @@ function CustomTooltip({ active, payload, label, cats }: {
   );
 }
 
-// ── budget bar ──────────────────────────────────────────────────────
-
-function BudgetBar({ expense, budget, loading }: { expense: number; budget: number; loading: boolean }) {
-  if (loading) return (
-    <div className="card" style={{ marginBottom: 20 }}>
-      <div className="card-header"><h2 className="card-title">予算達成状況</h2></div>
-      <div className="card-body">
-        <div style={{ height: 60, background: "var(--surface-2)", borderRadius: 8, animation: "pulse 1.5s ease-in-out infinite" }} />
-      </div>
-    </div>
-  );
-  if (budget <= 0) return (
-    <div className="card" style={{ marginBottom: 20 }}>
-      <div className="card-header"><h2 className="card-title">予算達成状況</h2></div>
-      <div className="card-body" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, padding:"20px 0" }}>
-        <span style={{ color:"var(--text-3)", fontSize:13 }}>この月の予算が設定されていません</span>
-        <a href="/budgets" className="btn btn-secondary" style={{ fontSize:12, padding:"5px 14px" }}>予算を設定 →</a>
-      </div>
-    </div>
-  );
-  const over     = expense > budget;
-  const scale    = Math.max(expense, budget) * 1.18;
-  const greenPct = Math.min(expense, budget) / scale * 100;
-  const redPct   = Math.max(0, expense - budget) / scale * 100;
-  const linePct  = budget / scale * 100;
-  const usedPct  = Math.round(expense / budget * 100);
-
-  return (
-    <div className="card" style={{ marginBottom: 20 }}>
-      <div className="card-header"><h2 className="card-title">予算達成状況</h2></div>
-      <div className="card-body">
-        {/* Labels */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:12 }}>
-          <div>
-            <span style={{ fontSize:12, color:"var(--text-3)" }}>当月支出</span>
-            <span style={{ fontSize:22, fontWeight:800, marginLeft:8, color: over ? "var(--red)" : "var(--green)" }}>
-              {expense.toLocaleString()}<span style={{ fontSize:13, fontWeight:400 }}> 円</span>
-            </span>
-          </div>
-          <div style={{ textAlign:"right" }}>
-            <span style={{ fontSize:12, color:"var(--text-3)" }}>予算</span>
-            <span style={{ fontSize:16, fontWeight:600, marginLeft:8, color:"var(--sapphire)" }}>
-              {budget.toLocaleString()}<span style={{ fontSize:12, fontWeight:400 }}> 円</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Bar */}
-        <div style={{ position:"relative", height:36, marginTop:24, marginBottom:10 }}>
-          {/* Track */}
-          <div style={{ position:"absolute", inset:0, background:"var(--surface-2)", borderRadius:10 }} />
-
-          {/* Green fill */}
-          <div style={{
-            position:"absolute", left:0, top:0, bottom:0,
-            width:`${greenPct}%`,
-            background:"linear-gradient(90deg,#16a34a,#4ade80)",
-            borderRadius: over ? "10px 0 0 10px" : 10,
-            transition:"width 0.7s cubic-bezier(.4,0,.2,1)",
-          }} />
-
-          {/* Red overflow */}
-          {over && (
-            <div style={{
-              position:"absolute", left:`${greenPct}%`, top:0, bottom:0,
-              width:`${redPct}%`,
-              background:"linear-gradient(90deg,#dc2626,#f87171)",
-              borderRadius:"0 10px 10px 0",
-              transition:"width 0.7s cubic-bezier(.4,0,.2,1)",
-            }} />
-          )}
-
-          {/* Budget line */}
-          <div style={{
-            position:"absolute", left:`${linePct}%`, top:-10, bottom:-10,
-            width:3, background:"var(--sapphire)", borderRadius:2, zIndex:10,
-            transform:"translateX(-50%)",
-          }}>
-            <div style={{
-              position:"absolute", bottom:"calc(100% + 4px)", left:"50%",
-              transform:"translateX(-50%)",
-              fontSize:10, fontWeight:700, color:"var(--sapphire)", whiteSpace:"nowrap",
-              background:"var(--surface)", padding:"1px 4px", borderRadius:4,
-            }}>予算ライン</div>
-          </div>
-
-          {/* Usage % label inside bar */}
-          {greenPct > 12 && (
-            <div style={{
-              position:"absolute", left:10, top:0, bottom:0,
-              display:"flex", alignItems:"center",
-              fontSize:12, fontWeight:700, color:"#fff",
-              textShadow:"0 1px 2px rgba(0,0,0,0.3)",
-            }}>
-              {usedPct}%
-            </div>
-          )}
-        </div>
-
-        {/* Footer text */}
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginTop:6 }}>
-          <span style={{ color: over ? "var(--red)" : "var(--green)", fontWeight:600 }}>
-            {over
-              ? `⚠ 予算超過 +${(expense - budget).toLocaleString()}円`
-              : `✓ 予算内  残り ${(budget - expense).toLocaleString()}円`}
-          </span>
-          <span style={{ color:"var(--text-3)" }}>{usedPct}% 消化</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── main page ───────────────────────────────────────────────────────
-
 export default function BalancePage() {
   const router   = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -349,14 +234,13 @@ export default function BalancePage() {
         { data: cpRows },
       ] = await Promise.all([
         supabase.from("transactions").select("amount, tx_type").lt("tx_date", monthStart),
-        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name").gte("tx_date", monthStart).lt("tx_date", monthEnd),
+        supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name, has_tax, tax_amount").gte("tx_date", monthStart).lt("tx_date", monthEnd),
         supabase.from("monthly_budgets").select("budget_amount").eq("target_month", monthStart).maybeSingle(),
         supabase.from("categories").select("id, name, kind").eq("is_active", true),
         supabase.from("counterparties").select("id, name").eq("is_active", true),
       ]);
 
       if (budgetError) console.error("[balance] budget query error:", budgetError);
-      console.log("[balance] budgetRow:", budgetRow, "for month:", monthStart);
 
       if (!mounted) return;
 
@@ -405,7 +289,6 @@ export default function BalancePage() {
     <>
       <Header />
       <main className="page">
-        {/* Heading */}
         <div className="page-heading">
           <h1 className="page-title">収支バランス</h1>
           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -415,7 +298,6 @@ export default function BalancePage() {
           </div>
         </div>
 
-        {/* Summary cards */}
         <div className="stats-grid" style={{ gridTemplateColumns:"repeat(3, 1fr)" }}>
           <div className="stat-card">
             <div className="stat-label">前月繰越</div>
@@ -442,26 +324,23 @@ export default function BalancePage() {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">予算差額 <span style={{ fontSize:11, fontWeight:400, color:"var(--text-4)" }}>（予算－支出）</span></div>
+            <div className="stat-label">予算差額 <span style={{ fontSize:11, fontWeight:400, color:"var(--text-4)" }}>（予算−支出）</span></div>
             <div className="stat-value" style={{ color: budget===0 ? "var(--text-3)" : budgetVariance>=0 ? "var(--green)" : "var(--red)" }}>
               {budget > 0 ? <>{budgetVariance >= 0 ? "+" : ""}{budgetVariance.toLocaleString()}<span className="stat-value-unit">円</span></> : <span style={{ fontSize:16, color:"var(--text-3)" }}>—</span>}
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">翌月繰越</div>
+            <div className="stat-label">翨月繰越</div>
             <div className="stat-value" style={{ color: nextCarryover>=0 ? "var(--sapphire)" : "var(--red)" }}>
               {nextCarryover.toLocaleString()}<span className="stat-value-unit">円</span>
             </div>
           </div>
         </div>
 
-        {/* Budget bar */}
         <BudgetBar expense={monthExpense} budget={budget} loading={loading} />
 
-        {/* Pie charts */}
         {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0) && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
-            {/* 相手先名別 */}
             <div className="card">
               <div className="card-header"><h2 className="card-title">相手先名別 支出</h2></div>
               <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
@@ -481,7 +360,6 @@ export default function BalancePage() {
               </div>
             </div>
 
-            {/* 相手先ジャンル別 */}
             <div className="card">
               <div className="card-header"><h2 className="card-title">相手先ジャンル別 支出</h2></div>
               <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
@@ -503,12 +381,10 @@ export default function BalancePage() {
           </div>
         )}
 
-        {/* Chart card */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">日次収支グラフ</h2>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-              {/* View toggle */}
               <div style={{ display:"flex", border:"1px solid var(--border-strong)", borderRadius:8, overflow:"hidden" }}>
                 {(["total","category"] as const).map((m) => (
                   <button
@@ -527,7 +403,6 @@ export default function BalancePage() {
                 ))}
               </div>
 
-              {/* Legend */}
               {mode === "total" ? (
                 <div style={{ display:"flex", gap:10, fontSize:11, color:"var(--text-3)", alignItems:"center" }}>
                   <span style={{ display:"flex", alignItems:"center", gap:4 }}>
@@ -592,10 +467,8 @@ export default function BalancePage() {
                     cursor={{ fill:"rgba(26,74,143,0.05)" }}
                   />
 
-                  {/* Center line */}
                   <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
 
-                  {/* Budget line */}
                   {budget>0 && (
                     <ReferenceLine
                       y={-budget}
@@ -609,7 +482,6 @@ export default function BalancePage() {
                     />
                   )}
 
-                  {/* ── Total mode ── */}
                   {mode === "total" && (
                     <>
                       <Bar dataKey="income" name="収入" maxBarSize={28} radius={[4,4,0,0]}>
@@ -623,7 +495,6 @@ export default function BalancePage() {
                     </>
                   )}
 
-                  {/* ── Category mode ── */}
                   {mode === "category" && (
                     <>
                       {incCats.map((c,i) => (
@@ -632,7 +503,6 @@ export default function BalancePage() {
                           radius={i===incCats.length-1 ? [4,4,0,0] : [0,0,0,0]}
                         />
                       ))}
-                      {/* uncategorized income */}
                       <Bar dataKey="_inc_other" name="未分類(収入)" stackId="income"
                         fill={INCOME_COLORS[incCats.length%INCOME_COLORS.length]} maxBarSize={28}
                         radius={[4,4,0,0]}
@@ -644,7 +514,6 @@ export default function BalancePage() {
                           radius={i===expCats.length-1 ? [0,0,4,4] : [0,0,0,0]}
                         />
                       ))}
-                      {/* uncategorized expense */}
                       <Bar dataKey="_exp_other" name="未分類(支出)" stackId="expense"
                         fill={EXPENSE_COLORS[expCats.length%EXPENSE_COLORS.length]} maxBarSize={28}
                         radius={[0,0,4,4]}
