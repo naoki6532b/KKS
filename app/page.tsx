@@ -67,13 +67,7 @@ export default async function HomePage() {
     incomeTotal  = txRows?.filter((x) => x.tx_type === "income").reduce((s, x) => s + x.amount, 0) ?? 0;
     expenseTotal = txRows?.filter((x) => x.tx_type === "expense").reduce((s, x) => s + x.amount, 0) ?? 0;
 
-    let totalDeductions = 0;
-    for (const slip of slipsThisMonth ?? []) {
-      for (const it of (slip.salary_slip_items as { item_key: string; amount: number }[])) {
-        const def = SALARY_ITEM_MAP.get(it.item_key);
-        if (def?.section === "deduction") totalDeductions += it.amount;
-      }
-    }
+    const totalDeductions = txRows?.filter((x) => x.tx_type === "expense" && x.salary_slip_id).reduce((s, x) => s + x.amount, 0) ?? 0;
     displayedBudget = budget + totalDeductions;
   } else {
     const nonSalaryTx = txRows?.filter((x) => !x.salary_slip_id) ?? [];
