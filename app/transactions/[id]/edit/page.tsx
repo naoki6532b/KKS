@@ -49,6 +49,8 @@ export default function EditTransactionPage() {
   const [counterpartyName, setCounterpartyName] = useState("");
   const [accountId, setAccountId]             = useState("");
   const [memo, setMemo]                       = useState("");
+  const [hasTax, setHasTax]                   = useState(true);
+  const [taxRate, setTaxRate]                 = useState(10);
 
   useEffect(() => {
     let mounted = true;
@@ -57,12 +59,13 @@ export default function EditTransactionPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) { router.push("/login"); router.refresh(); return; }
 
-      const [{ data: txData, error: txError }, { data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }, { data: nameData }] = await Promise.all([
-        supabase.from("transactions").select("id, tx_date, tx_type, amount, currency, currency_amount, item_name, category_id, counterparty_id, counterparty_name, account_id, memo").eq("id", txId).eq("user_id", user.id).single(),
+      const [{ data: txData, error: txError }, { data: catData, error: catError }, { data: cpData, error: cpError }, { data: accData, error: accError }, { data: nameData }, { data: settingsData }] = await Promise.all([
+        supabase.from("transactions").select("id, tx_date, tx_type, amount, currency, currency_amount, item_name, category_id, counterparty_id, counterparty_name, account_id, memo, has_tax").eq("id", txId).eq("user_id", user.id).single(),
         supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
         supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order, default_category_id").eq("is_active", true),
         supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order, close_day_type, close_day, pay_month_offset, pay_day_type, pay_day").eq("is_active", true),
         supabase.from("transactions").select("counterparty_name").not("counterparty_name", "is", null).eq("user_id", user.id),
+        supabase.from("user_settings").select("tax_rate").eq("user_id", user.id).maybeSingle(),
       ]);
       if (!mounted) return;
       if (txError || catError || cpError || accError) {
@@ -75,7 +78,6 @@ export default function EditTransactionPage() {
       setTxDate(txData.tx_date);
       setTxType(txData.tx_type as "income"|"expense");
       setCurrency(cur);
-      // Display in original currency if foreign, otherwise JPY amount
       setAmount(cur !== "JPY" && tx.currency_amount ? String(tx.currency_amount) : String(txData.amount));
       setItemName((tx.item_name as string) ?? "");
       setCategoryId(txData.category_id ?? "");
@@ -83,10 +85,12 @@ export default function EditTransactionPage() {
       setCounterpartyName((tx.counterparty_name as string) ?? "");
       setAccountId(txData.account_id ?? "");
       setMemo(txData.memo ?? "");
+      setHasTax(!!(tx.has_tax));
       setCategories([...(catData ?? [])].sort(compareRows) as CategoryRow[]);
       setCounterparties([...(cpData ?? [])].sort(compareRows) as CounterpartyRow[]);
       setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
       setPastCpNames([...new Set((nameData ?? []).map((r: { counterparty_name: string | null }) => r.counterparty_name).filter(Boolean))] as string[]);
+      if (settingsData?.tax_rate != null) setTaxRate(Number(settingsData.tax_rate));
       setLoading(false);
     }
     loadData();
@@ -126,6 +130,7 @@ export default function EditTransactionPage() {
       if (!selectedAccount) { setErrorMessage("選択された支払方法が見つかりません。"); return; }
       const finalJpy = jpyAmount ?? 0;
       const cardDueDate = txType === "expense" ? computeCardDueDate(txDate, selectedAccount as AccountRule) : null;
+      const taxAmount = hasTax ? Math.round(finalJpy * taxRate / (100 + taxRate)) : 0;
       const { error } = await supabase.from("transactions").update({
         tx_date: txDate, target_month: firstDayOfMonth(txDate), tx_type: txType,
         amount: finalJpy,
@@ -136,6 +141,7 @@ export default function EditTransactionPage() {
         counterparty_name: counterpartyName.trim() || null,
         account_id: accountId,
         item_name: itemName.trim() || null, memo: memo.trim() || null, card_due_date: cardDueDate,
+        has_tax: hasTax, tax_amount: taxAmount,
       }).eq("id", txId).eq("user_id", user.id);
       if (error) { setErrorMessage(error.message); return; }
       router.push("/transactions");
@@ -255,6 +261,19 @@ export default function EditTransactionPage() {
               <div className="field">
                 <label className="field-label">メモ</label>
                 <textarea rows={3} value={memo} onChange={(e) => setMemo(e.target.value)} className="field-input" style={{ resize: "vertical" }} />
+              </div>
+
+              <div className="field">
+                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+                  <input type="checkbox" checked={hasTax} onChange={(e) => setHasTax(e.target.checked)} style={{ width:18, height:18, accentColor:"var(--sapphire-mid)", cursor:"pointer" }} />
+                  <span className="field-label" style={{ margin:0 }}>消費税込み（{taxRate}%）</span>
+                </label>
+                {hasTax && jpyAmount && jpyAmount > 0 && (
+                  <div style={{ marginTop:6, fontSize:12, color:"var(--text-3)", paddingLeft:28 }}>
+                    消費税額：約 <strong style={{ color:"var(--sapphire)" }}>{Math.round(jpyAmount * taxRate / (100 + taxRate)).toLocaleString()} 円</strong>
+                    　本体価格：約 {(jpyAmount - Math.round(jpyAmount * taxRate / (100 + taxRate))).toLocaleString()} 円
+                  </div>
+                )}
               </div>
 
               <div className="btn-group">

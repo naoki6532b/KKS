@@ -17,6 +17,7 @@ export type TxRow = {
   memo?: string | null;
   has_tax?: boolean | null;
   tax_amount?: number | null;
+  salary_slip_id?: string | null;
   categories: { name?: string } | null;
   counterparties: { name?: string } | null;
   accounts: { name?: string } | null;
@@ -146,12 +147,12 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                         <td style={{ whiteSpace: "nowrap" }}>{row.categories?.name ?? "—"}</td>
                         <td className="col-sp-hide">{row.counterparties?.name ?? "—"}</td>
                         <td style={{ whiteSpace: "nowrap" }}>{row.counterparty_name ?? "—"}</td>
-                        <td style={{ whiteSpace: "nowrap", color: "var(--text-2)" }}>
+                        <td style={{ color: "var(--text-2)" }}>
                           {row.item_name ?? ""}
                           {row.has_tax && <span style={{ marginLeft:4, fontSize:10, background:"var(--sapphire-light)", color:"var(--sapphire)", borderRadius:4, padding:"1px 4px", fontWeight:600, verticalAlign:"middle" }}>税</span>}
                         </td>
                         <td className="col-sp-hide">{row.accounts?.name ?? "—"}</td>
-                        <td className="col-sp-hide" style={{ whiteSpace: "nowrap", color: "var(--text-3)" }}>
+                        <td className="col-sp-hide" style={{ color: "var(--text-3)" }}>
                           {row.memo ?? ""}
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -162,7 +163,10 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                         </td>
                         <td>
                           <div className="table-actions">
-                            <Link href={`/transactions/${row.id}/edit`} className="btn btn-secondary btn-sm">訂正</Link>
+                            <Link
+                              href={row.salary_slip_id ? `/salary/${row.salary_slip_id}/edit` : `/transactions/${row.id}/edit`}
+                              className="btn btn-secondary btn-sm"
+                            >訂正</Link>
                           </div>
                         </td>
                       </tr>

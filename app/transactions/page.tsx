@@ -2,34 +2,46 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/app/components/header";
-import { CURRENCY_MAP } from "@/lib/exchange";
+import { TransactionList, type TxRow } from "@/app/components/transaction-list";
+import { SALARY_ITEM_MAP } from "@/lib/salary";
 
-type TxRow = {
+type SlipWithItems = {
   id: string;
-  tx_date: string;
-  tx_type: string;
-  amount: number;
-  currency?: string | null;
-  currency_amount?: number | null;
-  exchange_rate?: number | null;
-  item_name?: string | null;
-  counterparty_name?: string | null;
-  memo?: string | null;
-  categories: { name?: string } | null;
-  counterparties: { name?: string } | null;
+  slip_date: string;
+  slip_type: "salary" | "bonus";
   accounts: { name?: string } | null;
+  salary_slip_items: { item_key: string; amount: number }[];
 };
 
-function groupByMonth(rows: TxRow[]): { month: string; rows: TxRow[] }[] {
-  const map = new Map<string, TxRow[]>();
-  for (const row of rows) {
-    const month = row.tx_date.slice(0, 7);
-    if (!map.has(month)) map.set(month, []);
-    map.get(month)!.push(row);
+function slipToSyntheticRow(slip: SlipWithItems): TxRow {
+  let payment = 0, deduction = 0;
+  for (const it of slip.salary_slip_items) {
+    const def = SALARY_ITEM_MAP.get(it.item_key);
+    if (!def) continue;
+    if (def.section === "deduction") deduction += it.amount;
+    else payment += it.amount;
   }
-  return Array.from(map.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([month, rows]) => ({ month, rows }));
+  const net = payment - deduction;
+  const m = parseInt(slip.slip_date.split("-")[1], 10);
+  const typeLabel = slip.slip_type === "salary" ? "給与" : "賞与";
+  return {
+    id: `__slip__${slip.id}`,
+    tx_date: slip.slip_date,
+    tx_type: "income",
+    amount: net,
+    currency: "JPY",
+    currency_amount: null,
+    exchange_rate: null,
+    item_name: `${typeLabel}（${m}月分）`,
+    counterparty_name: null,
+    memo: null,
+    has_tax: false,
+    tax_amount: null,
+    salary_slip_id: slip.id,
+    categories: null,
+    counterparties: null,
+    accounts: slip.accounts,
+  };
 }
 
 export default async function TransactionsPage() {
@@ -38,14 +50,39 @@ export default async function TransactionsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: rows, error } = await supabase
-    .from("transactions")
-    .select("id, tx_date, tx_type, amount, currency, currency_amount, exchange_rate, item_name, counterparty_name, memo, categories(name), counterparties(name), accounts(name)")
-    .order("tx_date", { ascending: true })
-    .order("created_at", { ascending: true })
-    .limit(500);
+  const [{ data: rows, error }, { data: userSettings }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("id, tx_date, tx_type, amount, currency, currency_amount, exchange_rate, item_name, counterparty_name, memo, has_tax, tax_amount, salary_slip_id, categories(name), counterparties(name), accounts(name)")
+      .order("tx_date", { ascending: true })
+      .order("created_at", { ascending: true })
+      .limit(500),
 
-  const groups = groupByMonth((rows ?? []) as TxRow[]);
+    supabase
+      .from("user_settings")
+      .select("strict_display")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
+
+  const strictDisplay = userSettings?.strict_display ?? false;
+
+  let displayRows: TxRow[] = (rows ?? []) as TxRow[];
+
+  if (!strictDisplay) {
+    const nonSalaryRows = displayRows.filter((r) => !r.salary_slip_id);
+
+    const { data: slips } = await supabase
+      .from("salary_slips")
+      .select("id, slip_date, slip_type, accounts(name), salary_slip_items(item_key, amount)")
+      .order("slip_date", { ascending: true });
+
+    const syntheticRows: TxRow[] = ((slips ?? []) as unknown as SlipWithItems[]).map(slipToSyntheticRow);
+
+    displayRows = [...nonSalaryRows, ...syntheticRows].sort((a, b) =>
+      a.tx_date.localeCompare(b.tx_date)
+    );
+  }
 
   return (
     <>
@@ -60,95 +97,7 @@ export default async function TransactionsPage() {
 
         {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error.message}</div>}
 
-        {groups.length === 0 ? (
-          <div className="card"><p className="empty-state">取引がまだありません。</p></div>
-        ) : (
-          groups.map(({ month, rows: mRows }) => {
-            const incomeTotal  = mRows.filter((r) => r.tx_type === "income").reduce((s, r) => s + r.amount, 0);
-            const expenseTotal = mRows.filter((r) => r.tx_type === "expense").reduce((s, r) => s + r.amount, 0);
-            const [y, m] = month.split("-");
-
-            return (
-              <div key={month} className="card" style={{ marginBottom: 20 }}>
-                <div className="card-header">
-                  <h2 className="card-title">{y}年{m}月</h2>
-                </div>
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>日付</th>
-                        <th>科目</th>
-                        <th>相手先ジャンル</th>
-                        <th>相手先名</th>
-                        <th>品名 / 名称</th>
-                        <th>口座</th>
-                        <th>メモ</th>
-                        <th style={{ textAlign: "right" }}>入金</th>
-                        <th style={{ textAlign: "right" }}>出金</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mRows.map((row) => (
-                        <tr key={row.id}>
-                          <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>{row.tx_date}</td>
-                          <td>{row.categories?.name ?? "—"}</td>
-                          <td>{row.counterparties?.name ?? "—"}</td>
-                          <td style={{ whiteSpace: "nowrap" }}>{row.counterparty_name ?? "—"}</td>
-                          <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
-                            {row.item_name ?? ""}
-                          </td>
-                          <td>{row.accounts?.name ?? "—"}</td>
-                          <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>
-                            {row.memo ?? ""}
-                          </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                            {row.tx_type === "income" ? (
-                              <span className="amount-income">
-                                {row.currency && row.currency !== "JPY" && row.currency_amount
-                                  ? <>{CURRENCY_MAP.get(row.currency)?.symbol}{row.currency_amount.toLocaleString()}<br/><span style={{fontSize:11,fontWeight:400}}>({row.amount.toLocaleString()}円)</span></>
-                                  : <>{row.amount.toLocaleString()}</>}
-                              </span>
-                            ) : ""}
-                          </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                            {row.tx_type === "expense" ? (
-                              <span className="amount-expense">
-                                {row.currency && row.currency !== "JPY" && row.currency_amount
-                                  ? <>{CURRENCY_MAP.get(row.currency)?.symbol}{row.currency_amount.toLocaleString()}<br/><span style={{fontSize:11,fontWeight:400}}>({row.amount.toLocaleString()}円)</span></>
-                                  : <>{row.amount.toLocaleString()}</>}
-                              </span>
-                            ) : ""}
-                          </td>
-                          <td>
-                            <div className="table-actions">
-                              <Link href={`/transactions/${row.id}/edit`} className="btn btn-secondary btn-sm">
-                                訂正
-                              </Link>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ background: "var(--surface-2)", fontWeight: 700 }}>
-                        <td colSpan={7} style={{ textAlign: "right", color: "var(--text-2)", fontSize: 13 }}>月合計</td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <span className="amount-income">{incomeTotal.toLocaleString()}</span>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <span className="amount-expense">{expenseTotal.toLocaleString()}</span>
-                        </td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            );
-          })
-        )}
+        <TransactionList rows={displayRows} />
       </main>
     </>
   );
