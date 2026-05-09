@@ -129,11 +129,11 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                     <tr>
                       <th>日付</th>
                       <th>科目</th>
-                      <th>相手先ジャンル</th>
+                      <th className="col-sp-hide">相手先ジャンル</th>
                       <th>相手先名</th>
                       <th>品名 / 名称</th>
-                      <th>口座</th>
-                      <th>メモ</th>
+                      <th className="col-sp-hide">口座</th>
+                      <th className="col-sp-hide">メモ</th>
                       <th style={{ textAlign: "right" }}>入金</th>
                       <th style={{ textAlign: "right" }}>出金</th>
                       <th></th>
@@ -143,15 +143,15 @@ export function TransactionList({ rows }: { rows: TxRow[] }) {
                     {mRows.map((row) => (
                       <tr key={row.id}>
                         <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>{row.tx_date}</td>
-                        <td>{row.categories?.name ?? "—"}</td>
-                        <td>{row.counterparties?.name ?? "—"}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>{row.categories?.name ?? "—"}</td>
+                        <td className="col-sp-hide">{row.counterparties?.name ?? "—"}</td>
                         <td style={{ whiteSpace: "nowrap" }}>{row.counterparty_name ?? "—"}</td>
                         <td style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)" }}>
                           {row.item_name ?? ""}
                           {row.has_tax && <span style={{ marginLeft:4, fontSize:10, background:"var(--sapphire-light)", color:"var(--sapphire)", borderRadius:4, padding:"1px 4px", fontWeight:600, verticalAlign:"middle" }}>税</span>}
                         </td>
-                        <td>{row.accounts?.name ?? "—"}</td>
-                        <td style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>
+                        <td className="col-sp-hide">{row.accounts?.name ?? "—"}</td>
+                        <td className="col-sp-hide" style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)" }}>
                           {row.memo ?? ""}
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
