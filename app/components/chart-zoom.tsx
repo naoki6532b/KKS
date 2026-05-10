@@ -10,11 +10,11 @@ export function ChartZoom({
 }: {
   title?: string;
   normalHeight?: number;
-  children: (height: number | `${number}%`, zoomed: boolean) => React.ReactNode;
+  children: (height: number | `${number}%`, zoomed: boolean, zoomedWidth?: number) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [zoomedHeight, setZoomedHeight] = useState(0);
+  const [zoomedSize, setZoomedSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -31,10 +31,13 @@ export function ChartZoom({
 
   useEffect(() => {
     if (!open) return;
-    const update = () => setZoomedHeight(window.innerHeight - 90);
+    const update = () => setZoomedSize({
+      w: window.innerWidth - 48,
+      h: window.innerHeight - 90,
+    });
     update();
     window.addEventListener("resize", update);
-    return () => { window.removeEventListener("resize", update); setZoomedHeight(0); };
+    return () => { window.removeEventListener("resize", update); setZoomedSize({ w: 0, h: 0 }); };
   }, [open]);
 
   return (
@@ -91,7 +94,7 @@ export function ChartZoom({
             </span>
           </div>
           <div style={{ flex: 1, minHeight: 0, width: "100%" }}>
-            {zoomedHeight > 0 && children(zoomedHeight, true)}
+            {zoomedSize.h > 0 && children(zoomedSize.h, true, zoomedSize.w)}
           </div>
         </div>,
         document.body

@@ -410,19 +410,25 @@ export default function BalancePage() {
                   <p className="empty-state" style={{ fontSize:13 }}>相手先名のデータなし</p>
                 ) : (
                   <ChartZoom title="相手先名別 支出" normalHeight={260}>
-                    {(h, zoomed) => (
+                    {(h, zoomed, w) => w ? (
+                      <PieChart width={w} height={h as number} margin={{ top: 55, right: 90, bottom: 40, left: 90 }}>
+                        <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                          outerRadius="44%" innerRadius="22%"
+                          label={renderPieLabel} labelLine={{ stroke: "#64748b" }}>
+                          {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                        <Legend iconSize={12} wrapperStyle={{ fontSize: 13, color: "#cbd5e1" }} />
+                      </PieChart>
+                    ) : (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart margin={zoomed ? { top: 55, right: 90, bottom: 40, left: 90 } : undefined}>
-                          <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%"
-                            cy={zoomed ? "50%" : "45%"}
-                            outerRadius={zoomed ? "44%" : 90}
-                            innerRadius={zoomed ? "22%" : 44}
-                            label={zoomed ? renderPieLabel : undefined}
-                            labelLine={zoomed ? { stroke: "#64748b" } : false}>
+                        <PieChart>
+                          <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="45%"
+                            outerRadius={90} innerRadius={44} labelLine={false}>
                             {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
-                          <Legend iconSize={zoomed ? 12 : 10} wrapperStyle={{ fontSize: zoomed ? 13 : 11, color: zoomed ? "#cbd5e1" : undefined }} />
+                          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     )}
@@ -438,19 +444,25 @@ export default function BalancePage() {
                   <p className="empty-state" style={{ fontSize:13 }}>相手先ジャンルのデータなし</p>
                 ) : (
                   <ChartZoom title="相手先ジャンル別 支出" normalHeight={260}>
-                    {(h, zoomed) => (
+                    {(h, zoomed, w) => w ? (
+                      <PieChart width={w} height={h as number} margin={{ top: 55, right: 90, bottom: 40, left: 90 }}>
+                        <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                          outerRadius="44%" innerRadius="22%"
+                          label={renderPieLabel} labelLine={{ stroke: "#64748b" }}>
+                          {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                        <Legend iconSize={12} wrapperStyle={{ fontSize: 13, color: "#cbd5e1" }} />
+                      </PieChart>
+                    ) : (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart margin={zoomed ? { top: 55, right: 90, bottom: 40, left: 90 } : undefined}>
-                          <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%"
-                            cy={zoomed ? "50%" : "45%"}
-                            outerRadius={zoomed ? "44%" : 90}
-                            innerRadius={zoomed ? "22%" : 44}
-                            label={zoomed ? renderPieLabel : undefined}
-                            labelLine={zoomed ? { stroke: "#64748b" } : false}>
+                        <PieChart>
+                          <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%"
+                            outerRadius={90} innerRadius={44} labelLine={false}>
                             {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
-                          <Legend iconSize={zoomed ? 12 : 10} wrapperStyle={{ fontSize: zoomed ? 13 : 11, color: zoomed ? "#cbd5e1" : undefined }} />
+                          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     )}
