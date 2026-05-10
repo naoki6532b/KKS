@@ -369,11 +369,11 @@ export default function AnnualBalancePage() {
                   <ChartZoom title="相手先名別 支出" normalHeight={260}>
                     {(h, zoomed) => (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart margin={zoomed ? { top: 40, right: 80, bottom: 30, left: 80 } : undefined}>
+                        <PieChart margin={zoomed ? { top: 30, right: 50, bottom: 20, left: 50 } : undefined}>
                           <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%"
                             cy={zoomed ? "50%" : "45%"}
-                            outerRadius={zoomed ? "36%" : 90}
-                            innerRadius={zoomed ? "18%" : 44}
+                            outerRadius={zoomed ? "44%" : 90}
+                            innerRadius={zoomed ? "22%" : 44}
                             label={zoomed ? renderPieLabel : undefined}
                             labelLine={zoomed ? { stroke: "#64748b" } : false}>
                             {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
@@ -396,11 +396,11 @@ export default function AnnualBalancePage() {
                   <ChartZoom title="相手先ジャンル別 支出" normalHeight={260}>
                     {(h, zoomed) => (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart margin={zoomed ? { top: 40, right: 80, bottom: 30, left: 80 } : undefined}>
+                        <PieChart margin={zoomed ? { top: 30, right: 50, bottom: 20, left: 50 } : undefined}>
                           <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%"
                             cy={zoomed ? "50%" : "45%"}
-                            outerRadius={zoomed ? "36%" : 90}
-                            innerRadius={zoomed ? "18%" : 44}
+                            outerRadius={zoomed ? "44%" : 90}
+                            innerRadius={zoomed ? "22%" : 44}
                             label={zoomed ? renderPieLabel : undefined}
                             labelLine={zoomed ? { stroke: "#64748b" } : false}>
                             {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
