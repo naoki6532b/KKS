@@ -13,6 +13,7 @@ import { Header } from "@/app/components/header";
 import { BudgetBar } from "@/app/components/budget-bar";
 import { SALARY_ITEM_MAP } from "@/lib/salary";
 import { ChartZoom } from "@/app/components/chart-zoom";
+import { BarChartCanvas } from "@/app/components/bar-chart-canvas";
 
 type ViewMode = "total" | "category";
 
@@ -71,7 +72,7 @@ function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[
 function renderPieLabel({ cx, cy, midAngle, outerRadius, percent, name }: any) {
   if (percent < 0.04) return null;
   const RADIAN = Math.PI / 180;
-  const r = outerRadius + 38;
+  const r = outerRadius + 45;
   const x = cx + r * Math.cos(-midAngle * RADIAN);
   const y = cy + r * Math.sin(-midAngle * RADIAN);
   return (
@@ -411,9 +412,9 @@ export default function BalancePage() {
                 ) : (
                   <ChartZoom title="相手先名別 支出" normalHeight={260}>
                     {(h, zoomed, w) => w ? (
-                      <PieChart width={w} height={h as number} margin={{ top: 55, right: 90, bottom: 40, left: 90 }}>
+                      <PieChart width={w} height={h as number} margin={{ top: 45, right: 70, bottom: 35, left: 70 }}>
                         <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                          outerRadius="44%" innerRadius="22%"
+                          outerRadius="60%" innerRadius="30%"
                           label={renderPieLabel} labelLine={{ stroke: "#64748b" }}>
                           {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         </Pie>
@@ -445,9 +446,9 @@ export default function BalancePage() {
                 ) : (
                   <ChartZoom title="相手先ジャンル別 支出" normalHeight={260}>
                     {(h, zoomed, w) => w ? (
-                      <PieChart width={w} height={h as number} margin={{ top: 55, right: 90, bottom: 40, left: 90 }}>
+                      <PieChart width={w} height={h as number} margin={{ top: 45, right: 70, bottom: 35, left: 70 }}>
                         <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                          outerRadius="44%" innerRadius="22%"
+                          outerRadius="60%" innerRadius="30%"
                           label={renderPieLabel} labelLine={{ stroke: "#64748b" }}>
                           {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         </Pie>
@@ -616,6 +617,32 @@ export default function BalancePage() {
                       )}
                     </BarChart>
                   </ResponsiveContainer>
+                )}
+              </ChartZoom>
+            )}
+          </div>
+        </div>
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header">
+            <h2 className="card-title">日次収支グラフ（Canvas版）</h2>
+          </div>
+          <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+            {loading ? (
+              <div className="empty-state">読込中...</div>
+            ) : (
+              <ChartZoom title="日次収支グラフ（Canvas版）" normalHeight={460}>
+                {(h, zoomed, w) => (
+                  <BarChartCanvas
+                    data={totalData.map(d => ({
+                      name: d.name as string,
+                      income: (d.income as number) || 0,
+                      expense: (d.expense as number) || 0,
+                      isTotal: d.isTotal as boolean,
+                    }))}
+                    height={h as number}
+                    width={w}
+                    dark={zoomed}
+                  />
                 )}
               </ChartZoom>
             )}
