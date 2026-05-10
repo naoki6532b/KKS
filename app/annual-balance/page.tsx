@@ -1,0 +1,525 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ReferenceLine, ResponsiveContainer, Cell, LabelList,
+  PieChart, Pie, Legend,
+} from "recharts";
+import { createClient } from "@/lib/supabase/client";
+import { Header } from "@/app/components/header";
+import { BudgetBar } from "@/app/components/budget-bar";
+import { SALARY_ITEM_MAP } from "@/lib/salary";
+
+type ViewMode = "total" | "category";
+
+const INCOME_COLORS  = ["#4ade80","#22d3ee","#60a5fa","#818cf8","#a78bfa","#34d399","#86efac","#67e8f9"];
+const EXPENSE_COLORS = ["#f87171","#fb923c","#fbbf24","#e879f9","#f472b6","#c084fc","#fd8a6a","#fca5a5"];
+const PIE_COLORS     = ["#f87171","#fb923c","#fbbf24","#4ade80","#60a5fa","#a78bfa","#e879f9","#f472b6","#34d399","#94a3b8"];
+
+function getCurrentYear() { return new Date().getFullYear(); }
+
+type CategoryMeta = { id: string; name: string; kind: "income"|"expense" };
+type CpMeta       = { id: string; name: string };
+type TxRow        = { tx_date: string; tx_type: "income"|"expense"; amount: number; category_id: string|null; counterparty_id: string|null; counterparty_name: string|null; has_tax?: boolean|null; tax_amount?: number|null; salary_slip_id?: string|null };
+type SlipWithItems = { id: string; slip_date: string; salary_slip_items: { item_key: string; amount: number }[] };
+type PieSlice     = { name: string; value: number };
+type MonthBar     = { name: string; isTotal: boolean; [k: string]: number|string|boolean };
+
+function buildCpNamePie(txRows: TxRow[]): PieSlice[] {
+  const map = new Map<string, number>();
+  let totalTax = 0;
+  for (const tx of txRows) {
+    if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
+    const key = tx.counterparty_name?.trim() || "未設定";
+    map.set(key, (map.get(key) ?? 0) + tx.amount);
+    if (tx.has_tax && tx.tax_amount && tx.tax_amount > 0) totalTax += tx.tax_amount;
+  }
+  if (totalTax > 0) map.set("消費税", (map.get("消費税") ?? 0) + totalTax);
+  return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+
+function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[] {
+  const map = new Map<string, number>();
+  let totalTax = 0;
+  for (const tx of txRows) {
+    if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
+    const key = tx.counterparty_id ? (cpMap.get(tx.counterparty_id) ?? "未設定") : "未設定";
+    map.set(key, (map.get(key) ?? 0) + tx.amount);
+    if (tx.has_tax && tx.tax_amount && tx.tax_amount > 0) totalTax += tx.tax_amount;
+  }
+  if (totalTax > 0) map.set("税金", (map.get("税金") ?? 0) + totalTax);
+  return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+
+function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:"#fff", border:"1px solid #d6e2f0", borderRadius:8, padding:"8px 12px", fontSize:12, boxShadow:"0 4px 16px rgba(13,43,94,0.12)" }}>
+      <div style={{ fontWeight:700, color:"#0d2b5e" }}>{payload[0].name}</div>
+      <div style={{ color:"#dc2626" }}>{payload[0].value.toLocaleString()} 円</div>
+    </div>
+  );
+}
+
+function buildMonthlyTotalData(txRows: TxRow[]): MonthBar[] {
+  const mm = new Map<string, { income: number; expense: number }>();
+  for (let m = 1; m <= 12; m++) mm.set(String(m).padStart(2,"0"), { income: 0, expense: 0 });
+  for (const tx of txRows) {
+    const mon = tx.tx_date.slice(5, 7);
+    const e = mm.get(mon); if (!e) continue;
+    if (tx.tx_type === "income") e.income += tx.amount; else e.expense += tx.amount;
+  }
+  const result: MonthBar[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const e = mm.get(String(m).padStart(2,"0"))!;
+    result.push({ name: `${m}月`, income: e.income, expense: -e.expense, isTotal: false });
+  }
+  return result;
+}
+
+function buildMonthlyCategoryData(txRows: TxRow[], cats: CategoryMeta[]): MonthBar[] {
+  const mm = new Map<string, Map<string, number>>();
+  for (let m = 1; m <= 12; m++) mm.set(String(m).padStart(2,"0"), new Map());
+  for (const tx of txRows) {
+    const mon = tx.tx_date.slice(5, 7);
+    const byCat = mm.get(mon); if (!byCat) continue;
+    const cid = tx.category_id ?? (tx.tx_type === "income" ? "_inc_other" : "_exp_other");
+    byCat.set(cid, (byCat.get(cid) ?? 0) + (tx.tx_type === "income" ? tx.amount : -tx.amount));
+  }
+  const allKeys = [...cats.map((c) => c.id), "_inc_other", "_exp_other"];
+  const result: MonthBar[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const byCat = mm.get(String(m).padStart(2,"0"))!;
+    const row: MonthBar = { name: `${m}月`, isTotal: false };
+    allKeys.forEach((k) => { row[k] = 0; });
+    for (const [cid, val] of byCat) row[cid] = val;
+    result.push(row);
+  }
+  return result;
+}
+
+function fmtLabel(v: number): string {
+  const a = Math.abs(v);
+  if (a < 10000) return "";
+  return `${Math.round(a/10000)}万`;
+}
+
+function IncomeLabel(props: { x?: number; y?: number; width?: number; value?: number }) {
+  const { x=0, y=0, width=0, value=0 } = props;
+  const txt = fmtLabel(value);
+  if (!txt) return null;
+  return <text x={x+width/2} y={y-4} textAnchor="middle" fontSize={9} fill="#16a34a" fontWeight={600}>{txt}</text>;
+}
+
+function ExpenseLabel(props: { x?: number; y?: number; width?: number; height?: number; value?: number }) {
+  const { x=0, y=0, width=0, height=0, value=0 } = props;
+  const txt = fmtLabel(value);
+  if (!txt) return null;
+  return <text x={x+width/2} y={y+Math.abs(height)+11} textAnchor="middle" fontSize={9} fill="#dc2626" fontWeight={600}>{txt}</text>;
+}
+
+function CustomTooltip({ active, payload, label, cats }: {
+  active?: boolean;
+  payload?: { dataKey: string; value: number; color?: string }[];
+  label?: string;
+  cats: CategoryMeta[];
+}) {
+  if (!active || !payload?.length) return null;
+  const catMap = new Map(cats.map((c) => [c.id, c.name]));
+  catMap.set("_inc_other", "未分類"); catMap.set("_exp_other", "未分類");
+  const incEntries = payload.filter((p) => (p.value ?? 0) > 0);
+  const expEntries = payload.filter((p) => (p.value ?? 0) < 0);
+  return (
+    <div style={{ background:"#fff", border:"1px solid #d6e2f0", borderRadius:10, padding:"10px 14px", fontSize:12, boxShadow:"0 4px 16px rgba(13,43,94,0.12)", maxWidth:200 }}>
+      <div style={{ fontWeight:700, marginBottom:6, color:"#0d2b5e" }}>{label}</div>
+      {incEntries.length > 0 && (
+        <div style={{ marginBottom:4 }}>
+          <div style={{ fontSize:10, color:"#6b7280", marginBottom:2 }}>収入</div>
+          {incEntries.map((p) => (
+            <div key={p.dataKey} style={{ color:"#16a34a", display:"flex", justifyContent:"space-between", gap:8 }}>
+              <span>{catMap.get(p.dataKey) ?? "収入"}</span>
+              <span>{p.value.toLocaleString()}円</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {expEntries.length > 0 && (
+        <div>
+          <div style={{ fontSize:10, color:"#6b7280", marginBottom:2 }}>支出</div>
+          {expEntries.map((p) => (
+            <div key={p.dataKey} style={{ color:"#dc2626", display:"flex", justifyContent:"space-between", gap:8 }}>
+              <span>{catMap.get(p.dataKey) ?? "支出"}</span>
+              <span>{Math.abs(p.value).toLocaleString()}円</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function AnnualBalancePage() {
+  const router   = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
+  const [year, setYear]         = useState(getCurrentYear());
+  const [mode, setMode]         = useState<ViewMode>("total");
+  const [loading, setLoading]   = useState(true);
+
+  const [carryover, setCarryover]     = useState(0);
+  const [yearIncome, setYearIncome]   = useState(0);
+  const [yearExpense, setYearExpense] = useState(0);
+  const [budget, setBudget]           = useState(0);
+  const [totalData, setTotalData]     = useState<MonthBar[]>([]);
+  const [catData, setCatData]         = useState<MonthBar[]>([]);
+  const [cats, setCats]               = useState<CategoryMeta[]>([]);
+  const [cpNamePie, setCpNamePie]     = useState<PieSlice[]>([]);
+  const [cpGenrePie, setCpGenrePie]   = useState<PieSlice[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      setLoading(true);
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) { router.push("/login"); router.refresh(); return; }
+
+        const yearStart = `${year}-01-01`;
+        const yearEnd   = `${year + 1}-01-01`;
+
+        const [
+          { data: prevRows },
+          { data: curRows },
+          { data: budgetRows },
+          { data: catRows },
+          { data: cpRows },
+          { data: userSettings },
+          { data: slipsRaw },
+        ] = await Promise.all([
+          supabase.from("transactions").select("amount, tx_type").lt("tx_date", yearStart),
+          supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name, has_tax, tax_amount, salary_slip_id").gte("tx_date", yearStart).lt("tx_date", yearEnd),
+          supabase.from("monthly_budgets").select("budget_amount").gte("target_month", yearStart).lt("target_month", yearEnd),
+          supabase.from("categories").select("id, name, kind").eq("is_active", true),
+          supabase.from("counterparties").select("id, name").eq("is_active", true),
+          supabase.from("user_settings").select("strict_display").eq("user_id", user.id).maybeSingle(),
+          supabase.from("salary_slips").select("id, slip_date, salary_slip_items(item_key, amount)").gte("slip_date", yearStart).lt("slip_date", yearEnd),
+        ]);
+
+        if (!mounted) return;
+
+        const strictDisplay = userSettings?.strict_display ?? false;
+        const slips = (slipsRaw ?? []) as unknown as SlipWithItems[];
+        const rawCur = (curRows ?? []) as TxRow[];
+
+        let cur: TxRow[];
+        let totalDeductions = 0;
+
+        if (strictDisplay) {
+          cur = rawCur;
+          for (const slip of slips) {
+            for (const it of slip.salary_slip_items) {
+              const def = SALARY_ITEM_MAP.get(it.item_key);
+              if (def?.section === "deduction") totalDeductions += it.amount;
+            }
+          }
+        } else {
+          const nonSalary = rawCur.filter((t) => !t.salary_slip_id);
+          const synth: TxRow[] = slips.map((slip) => {
+            let payment = 0, deduction = 0;
+            for (const it of slip.salary_slip_items) {
+              const def = SALARY_ITEM_MAP.get(it.item_key);
+              if (!def) continue;
+              if (def.section === "deduction") deduction += it.amount;
+              else payment += it.amount;
+            }
+            return {
+              tx_date: slip.slip_date,
+              tx_type: "income" as const,
+              amount: payment - deduction,
+              category_id: null,
+              counterparty_id: null,
+              counterparty_name: null,
+              has_tax: false,
+              tax_amount: null,
+            };
+          });
+          cur = [...nonSalary, ...synth];
+        }
+
+        const prevBal    = (prevRows ?? []).reduce((s, t) => s + (t.tx_type === "income" ? t.amount : -t.amount), 0);
+        const income     = cur.filter((t) => t.tx_type === "income").reduce((s, t) => s + t.amount, 0);
+        const expense    = cur.filter((t) => t.tx_type === "expense").reduce((s, t) => s + t.amount, 0);
+        const rawBudget  = (budgetRows ?? []).reduce((s, b) => s + b.budget_amount, 0);
+        const adjBudget  = strictDisplay ? rawBudget + totalDeductions : rawBudget;
+        const allCats    = (catRows ?? []) as CategoryMeta[];
+        const cpMap      = new Map<string, string>((cpRows ?? []).map((c: CpMeta) => [c.id, c.name]));
+
+        setCarryover(prevBal);
+        setYearIncome(income);
+        setYearExpense(expense);
+        setBudget(adjBudget);
+        setCats(allCats);
+        setTotalData(buildMonthlyTotalData(cur));
+        setCatData(buildMonthlyCategoryData(cur, allCats));
+        setCpNamePie(buildCpNamePie(cur));
+        setCpGenrePie(buildCpGenrePie(cur, cpMap));
+      } catch (err) {
+        console.error("[annual-balance] loadData error:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    loadData();
+    return () => { mounted = false; };
+  }, [year, router, supabase]);
+
+  const nextCarryover  = carryover + yearIncome - yearExpense;
+  const budgetVariance = budget - yearExpense;
+  const chartData      = mode === "total" ? totalData : catData;
+  const incCats        = cats.filter((c) => c.kind === "income");
+  const expCats        = cats.filter((c) => c.kind === "expense");
+
+  const fmtY = (v: number) => {
+    const a = Math.abs(v);
+    if (a === 0) return "0";
+    if (a >= 1000000) return `${(a/10000).toFixed(0)}万`;
+    if (a >= 10000)   return `${(a/10000).toFixed(1)}万`;
+    return `${a}`;
+  };
+
+  return (
+    <>
+      <Header />
+      <main className="page">
+        <div className="page-heading">
+          <h1 className="page-title">年間収支</h1>
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <button type="button" onClick={() => setYear((y) => y - 1)} className="btn btn-secondary" style={{ padding:"6px 12px", fontSize:16 }}>‹</button>
+            <span className="field-input" style={{ display:"flex", alignItems:"center", padding:"6px 20px", fontWeight:700 }}>{year}年</span>
+            <button type="button" onClick={() => setYear((y) => y + 1)} className="btn btn-secondary" style={{ padding:"6px 12px", fontSize:16 }} disabled={year >= getCurrentYear()}>›</button>
+          </div>
+        </div>
+
+        <div className="stats-grid" style={{ gridTemplateColumns:"repeat(3, 1fr)" }}>
+          <div className="stat-card">
+            <div className="stat-label">前年繰越</div>
+            <div className="stat-value" style={{ color: carryover >= 0 ? "var(--text)" : "var(--red)" }}>
+              {carryover.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">当年収入</div>
+            <div className="stat-value" style={{ color:"var(--green)" }}>
+              {yearIncome.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">当年支出</div>
+            <div className="stat-value" style={{ color:"var(--red)" }}>
+              {yearExpense.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">年間予算</div>
+            <div className="stat-value" style={{ color:"var(--sapphire)" }}>
+              {budget > 0 ? <>{budget.toLocaleString()}<span className="stat-value-unit">円</span></> : <span style={{ fontSize:16, color:"var(--text-3)" }}>未設定</span>}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">予算差額 <span style={{ fontSize:11, fontWeight:400, color:"var(--text-4)" }}>（予算−支出）</span></div>
+            <div className="stat-value" style={{ color: budget === 0 ? "var(--text-3)" : budgetVariance >= 0 ? "var(--green)" : "var(--red)" }}>
+              {budget > 0 ? <>{budgetVariance >= 0 ? "+" : ""}{budgetVariance.toLocaleString()}<span className="stat-value-unit">円</span></> : <span style={{ fontSize:16, color:"var(--text-3)" }}>—</span>}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">翌年繰越</div>
+            <div className="stat-value" style={{ color: nextCarryover >= 0 ? "var(--sapphire)" : "var(--red)" }}>
+              {nextCarryover.toLocaleString()}<span className="stat-value-unit">円</span>
+            </div>
+          </div>
+        </div>
+
+        <BudgetBar expense={yearExpense} budget={budget} loading={loading} />
+
+        {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0) && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
+            <div className="card">
+              <div className="card-header"><h2 className="card-title">相手先名別 支出</h2></div>
+              <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+                {cpNamePie.length === 0 ? (
+                  <p className="empty-state" style={{ fontSize:13 }}>相手先名のデータなし</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                        {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<PieTooltip />} />
+                      <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header"><h2 className="card-title">相手先ジャンル別 支出</h2></div>
+              <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+                {cpGenrePie.length === 0 ? (
+                  <p className="empty-state" style={{ fontSize:13 }}>相手先ジャンルのデータなし</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                        {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<PieTooltip />} />
+                      <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">月次収支グラフ</h2>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+              <div style={{ display:"flex", border:"1px solid var(--border-strong)", borderRadius:8, overflow:"hidden" }}>
+                {(["total","category"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    style={{
+                      padding:"5px 12px", fontSize:12, fontWeight:600, border:"none", cursor:"pointer",
+                      background: mode === m ? "var(--sapphire-mid)" : "var(--surface)",
+                      color: mode === m ? "#fff" : "var(--text-3)",
+                      transition:"background 0.15s, color 0.15s",
+                    }}
+                  >
+                    {m === "total" ? "総数" : "科目別"}
+                  </button>
+                ))}
+              </div>
+              {mode === "total" ? (
+                <div style={{ display:"flex", gap:10, fontSize:11, color:"var(--text-3)", alignItems:"center" }}>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <span style={{ width:10,height:10,background:"#86efac",borderRadius:2,display:"inline-block" }} />収入
+                  </span>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <span style={{ width:10,height:10,background:"#f87171",borderRadius:2,display:"inline-block" }} />支出
+                  </span>
+                  {budget > 0 && (
+                    <span style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      <span style={{ width:14,height:0,borderTop:"2px dashed #9ca3af",display:"inline-block" }} />月平均予算
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display:"flex", gap:6, fontSize:11, flexWrap:"wrap", maxWidth:400 }}>
+                  {incCats.map((c, i) => (
+                    <span key={c.id} style={{ display:"flex", alignItems:"center", gap:3, color:"var(--text-3)" }}>
+                      <span style={{ width:8,height:8,borderRadius:2,background:INCOME_COLORS[i%INCOME_COLORS.length],display:"inline-block" }} />{c.name}
+                    </span>
+                  ))}
+                  {expCats.map((c, i) => (
+                    <span key={c.id} style={{ display:"flex", alignItems:"center", gap:3, color:"var(--text-3)" }}>
+                      <span style={{ width:8,height:8,borderRadius:2,background:EXPENSE_COLORS[i%EXPENSE_COLORS.length],display:"inline-block" }} />{c.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+            {loading ? (
+              <div className="empty-state">読込中...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={460}>
+                <BarChart
+                  data={chartData}
+                  margin={{ top:24, right:52, bottom:0, left:8 }}
+                  barCategoryGap="18%"
+                  barGap={2}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize:11, fill:"#94afc8" }}
+                    axisLine={{ stroke:"#d6e2f0" }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={fmtY}
+                    tick={{ fontSize:11, fill:"#64748b" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={52}
+                  />
+                  <Tooltip
+                    content={<CustomTooltip cats={cats} />}
+                    cursor={{ fill:"rgba(26,74,143,0.05)" }}
+                  />
+                  <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
+                  {budget > 0 && (
+                    <ReferenceLine
+                      y={-Math.round(budget / 12)}
+                      stroke="#9ca3af"
+                      strokeDasharray="6 3"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `月均 ${Math.round(budget/12) >= 10000 ? `${Math.round(budget/120000)*10}万` : Math.round(budget/12).toLocaleString()}円`,
+                        position:"insideRight", fontSize:10, fill:"#9ca3af", offset:4,
+                      }}
+                    />
+                  )}
+                  {mode === "total" && (
+                    <>
+                      <Bar dataKey="income" name="収入" maxBarSize={36} radius={[4,4,0,0]}>
+                        {chartData.map((d, i) => <Cell key={i} fill="#86efac" />)}
+                        <LabelList content={IncomeLabel as any} />
+                      </Bar>
+                      <Bar dataKey="expense" name="支出" maxBarSize={36} radius={[0,0,4,4]}>
+                        {chartData.map((d, i) => <Cell key={i} fill="#f87171" />)}
+                        <LabelList content={ExpenseLabel as any} />
+                      </Bar>
+                    </>
+                  )}
+                  {mode === "category" && (
+                    <>
+                      {incCats.map((c, i) => (
+                        <Bar key={`inc_${c.id}`} dataKey={c.id} name={c.name} stackId="income"
+                          fill={INCOME_COLORS[i%INCOME_COLORS.length]} maxBarSize={36}
+                          radius={i === incCats.length-1 ? [4,4,0,0] : [0,0,0,0]}
+                        />
+                      ))}
+                      <Bar dataKey="_inc_other" name="未分類(収入)" stackId="income"
+                        fill={INCOME_COLORS[incCats.length%INCOME_COLORS.length]} maxBarSize={36}
+                        radius={[4,4,0,0]}
+                      />
+                      {expCats.map((c, i) => (
+                        <Bar key={`exp_${c.id}`} dataKey={c.id} name={c.name} stackId="expense"
+                          fill={EXPENSE_COLORS[i%EXPENSE_COLORS.length]} maxBarSize={36}
+                          radius={i === expCats.length-1 ? [0,0,4,4] : [0,0,0,0]}
+                        />
+                      ))}
+                      <Bar dataKey="_exp_other" name="未分類(支出)" stackId="expense"
+                        fill={EXPENSE_COLORS[expCats.length%EXPENSE_COLORS.length]} maxBarSize={36}
+                        radius={[0,0,4,4]}
+                      />
+                    </>
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </main>
+    </>
+  );
+}

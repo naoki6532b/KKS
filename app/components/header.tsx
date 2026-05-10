@@ -11,7 +11,8 @@ export function Header() {
         <Link href="/" className="site-nav-link">ホーム</Link>
         <Link href="/transactions" className="site-nav-link">取引一覧</Link>
         <Link href="/transactions/new" className="site-nav-link">出入金入力</Link>
-        <Link href="/balance" className="site-nav-link">収支</Link>
+        <Link href="/balance" className="site-nav-link">月間収支</Link>
+        <Link href="/annual-balance" className="site-nav-link">年間収支</Link>
         <Link href="/salary" className="site-nav-link">給与</Link>
         <Link href="/subscriptions" className="site-nav-link">サブスク</Link>
         <Link href="/budgets" className="site-nav-link">月度予算</Link>
