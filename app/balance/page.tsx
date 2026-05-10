@@ -12,6 +12,7 @@ import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
 import { BudgetBar } from "@/app/components/budget-bar";
 import { SALARY_ITEM_MAP } from "@/lib/salary";
+import { ChartZoom } from "@/app/components/chart-zoom";
 
 type ViewMode = "total" | "category";
 
@@ -394,15 +395,19 @@ export default function BalancePage() {
                 {cpNamePie.length === 0 ? (
                   <p className="empty-state" style={{ fontSize:13 }}>相手先名のデータなし</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
-                        {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip content={<PieTooltip />} />
-                      <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <ChartZoom title="相手先名別 支出" normalHeight={260}>
+                    {(h) => (
+                      <ResponsiveContainer width="100%" height={h}>
+                        <PieChart>
+                          <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                            {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip content={<PieTooltip />} />
+                          <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartZoom>
                 )}
               </div>
             </div>
@@ -413,15 +418,19 @@ export default function BalancePage() {
                 {cpGenrePie.length === 0 ? (
                   <p className="empty-state" style={{ fontSize:13 }}>相手先ジャンルのデータなし</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
-                        {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip content={<PieTooltip />} />
-                      <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <ChartZoom title="相手先ジャンル別 支出" normalHeight={260}>
+                    {(h) => (
+                      <ResponsiveContainer width="100%" height={h}>
+                        <PieChart>
+                          <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                            {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip content={<PieTooltip />} />
+                          <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartZoom>
                 )}
               </div>
             </div>
@@ -485,90 +494,94 @@ export default function BalancePage() {
             {loading ? (
               <div className="empty-state">読込中...</div>
             ) : (
-              <ResponsiveContainer width="100%" height={460}>
-                <BarChart
-                  data={chartData}
-                  margin={{ top:24, right:52, bottom:0, left:8 }}
-                  barCategoryGap="18%"
-                  barGap={2}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize:10, fill:"#94afc8" }}
-                    axisLine={{ stroke:"#d6e2f0" }}
-                    tickLine={false}
-                    interval={0}
-                  />
-                  <YAxis
-                    domain={[-500000, 500000]}
-                    ticks={[-500000,-400000,-300000,-200000,-100000,0,100000,200000,300000,400000,500000]}
-                    tickFormatter={fmtY}
-                    tick={{ fontSize:11, fill:"#64748b" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
-                  <Tooltip
-                    content={<CustomTooltip cats={cats} />}
-                    cursor={{ fill:"rgba(26,74,143,0.05)" }}
-                  />
-
-                  <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
-
-                  {budget>0 && (
-                    <ReferenceLine
-                      y={-budget}
-                      stroke="#9ca3af"
-                      strokeDasharray="6 3"
-                      strokeWidth={1.5}
-                      label={{
-                        value:`予算 ${budget>=10000?`${(budget/10000).toFixed(0)}万`:budget.toLocaleString()}円`,
-                        position:"insideRight", fontSize:10, fill:"#9ca3af", offset:4,
-                      }}
-                    />
-                  )}
-
-                  {mode === "total" && (
-                    <>
-                      <Bar dataKey="income" name="収入" maxBarSize={28} radius={[4,4,0,0]}>
-                        {chartData.map((d,i) => <Cell key={i} fill={d.isTotal ? "#22c55e" : "#86efac"} />)}
-                        <LabelList content={IncomeLabel as any} />
-                      </Bar>
-                      <Bar dataKey="expense" name="支出" maxBarSize={28} radius={[0,0,4,4]}>
-                        {chartData.map((d,i) => <Cell key={i} fill={d.isTotal ? "#ef4444" : "#f87171"} />)}
-                        <LabelList content={ExpenseLabel as any} />
-                      </Bar>
-                    </>
-                  )}
-
-                  {mode === "category" && (
-                    <>
-                      {incCats.map((c,i) => (
-                        <Bar key={`inc_${c.id}`} dataKey={c.id} name={c.name} stackId="income"
-                          fill={INCOME_COLORS[i%INCOME_COLORS.length]} maxBarSize={28}
-                          radius={i===incCats.length-1 ? [4,4,0,0] : [0,0,0,0]}
-                        />
-                      ))}
-                      <Bar dataKey="_inc_other" name="未分類(収入)" stackId="income"
-                        fill={INCOME_COLORS[incCats.length%INCOME_COLORS.length]} maxBarSize={28}
-                        radius={[4,4,0,0]}
+              <ChartZoom title="日次収支グラフ" normalHeight={460}>
+                {(h) => (
+                  <ResponsiveContainer width="100%" height={h}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top:24, right:52, bottom:0, left:8 }}
+                      barCategoryGap="18%"
+                      barGap={2}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fontSize:10, fill:"#94afc8" }}
+                        axisLine={{ stroke:"#d6e2f0" }}
+                        tickLine={false}
+                        interval={0}
+                      />
+                      <YAxis
+                        domain={[-500000, 500000]}
+                        ticks={[-500000,-400000,-300000,-200000,-100000,0,100000,200000,300000,400000,500000]}
+                        tickFormatter={fmtY}
+                        tick={{ fontSize:11, fill:"#64748b" }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={48}
+                      />
+                      <Tooltip
+                        content={<CustomTooltip cats={cats} />}
+                        cursor={{ fill:"rgba(26,74,143,0.05)" }}
                       />
 
-                      {expCats.map((c,i) => (
-                        <Bar key={`exp_${c.id}`} dataKey={c.id} name={c.name} stackId="expense"
-                          fill={EXPENSE_COLORS[i%EXPENSE_COLORS.length]} maxBarSize={28}
-                          radius={i===expCats.length-1 ? [0,0,4,4] : [0,0,0,0]}
+                      <ReferenceLine y={0} stroke="#475569" strokeWidth={1.5} />
+
+                      {budget>0 && (
+                        <ReferenceLine
+                          y={-budget}
+                          stroke="#9ca3af"
+                          strokeDasharray="6 3"
+                          strokeWidth={1.5}
+                          label={{
+                            value:`予算 ${budget>=10000?`${(budget/10000).toFixed(0)}万`:budget.toLocaleString()}円`,
+                            position:"insideRight", fontSize:10, fill:"#9ca3af", offset:4,
+                          }}
                         />
-                      ))}
-                      <Bar dataKey="_exp_other" name="未分類(支出)" stackId="expense"
-                        fill={EXPENSE_COLORS[expCats.length%EXPENSE_COLORS.length]} maxBarSize={28}
-                        radius={[0,0,4,4]}
-                      />
-                    </>
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
+                      )}
+
+                      {mode === "total" && (
+                        <>
+                          <Bar dataKey="income" name="収入" maxBarSize={28} radius={[4,4,0,0]}>
+                            {chartData.map((d,i) => <Cell key={i} fill={d.isTotal ? "#22c55e" : "#86efac"} />)}
+                            <LabelList content={IncomeLabel as any} />
+                          </Bar>
+                          <Bar dataKey="expense" name="支出" maxBarSize={28} radius={[0,0,4,4]}>
+                            {chartData.map((d,i) => <Cell key={i} fill={d.isTotal ? "#ef4444" : "#f87171"} />)}
+                            <LabelList content={ExpenseLabel as any} />
+                          </Bar>
+                        </>
+                      )}
+
+                      {mode === "category" && (
+                        <>
+                          {incCats.map((c,i) => (
+                            <Bar key={`inc_${c.id}`} dataKey={c.id} name={c.name} stackId="income"
+                              fill={INCOME_COLORS[i%INCOME_COLORS.length]} maxBarSize={28}
+                              radius={i===incCats.length-1 ? [4,4,0,0] : [0,0,0,0]}
+                            />
+                          ))}
+                          <Bar dataKey="_inc_other" name="未分類(収入)" stackId="income"
+                            fill={INCOME_COLORS[incCats.length%INCOME_COLORS.length]} maxBarSize={28}
+                            radius={[4,4,0,0]}
+                          />
+
+                          {expCats.map((c,i) => (
+                            <Bar key={`exp_${c.id}`} dataKey={c.id} name={c.name} stackId="expense"
+                              fill={EXPENSE_COLORS[i%EXPENSE_COLORS.length]} maxBarSize={28}
+                              radius={i===expCats.length-1 ? [0,0,4,4] : [0,0,0,0]}
+                            />
+                          ))}
+                          <Bar dataKey="_exp_other" name="未分類(支出)" stackId="expense"
+                            fill={EXPENSE_COLORS[expCats.length%EXPENSE_COLORS.length]} maxBarSize={28}
+                            radius={[0,0,4,4]}
+                          />
+                        </>
+                      )}
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </ChartZoom>
             )}
           </div>
         </div>
