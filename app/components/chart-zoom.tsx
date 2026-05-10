@@ -10,7 +10,7 @@ export function ChartZoom({
 }: {
   title?: string;
   normalHeight?: number;
-  children: (height: number | `${number}%`) => React.ReactNode;
+  children: (height: number | `${number}%`, zoomed: boolean) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -31,7 +31,7 @@ export function ChartZoom({
   return (
     <>
       <div style={{ position: "relative" }}>
-        {children(normalHeight)}
+        {children(normalHeight, false)}
         <div
           onClick={(e) => { e.stopPropagation(); setOpen(true); }}
           style={{ position: "absolute", inset: 0, cursor: "zoom-in", zIndex: 10 }}
@@ -81,8 +81,8 @@ export function ChartZoom({
               クリックまたは Esc で閉じる ✕
             </span>
           </div>
-          <div style={{ flex: 1, minHeight: 0, width: "100%" }}>
-            {children("100%")}
+          <div style={{ flex: 1, minHeight: 0, width: "100%", overflow: "hidden" }}>
+            {children("100%", true)}
           </div>
         </div>,
         document.body
