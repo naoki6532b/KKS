@@ -71,11 +71,11 @@ function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[
 function renderPieLabel({ cx, cy, midAngle, outerRadius, percent, name }: any) {
   if (percent < 0.04) return null;
   const RADIAN = Math.PI / 180;
-  const r = outerRadius + 30;
+  const r = outerRadius + 38;
   const x = cx + r * Math.cos(-midAngle * RADIAN);
   const y = cy + r * Math.sin(-midAngle * RADIAN);
   return (
-    <text x={x} y={y} fill="#e2e8f0" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={12} fontWeight={600}>
+    <text x={x} y={y} fill="#f1f5f9" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={15} fontWeight={700}>
       {`${name} ${(percent * 100).toFixed(1)}%`}
     </text>
   );
@@ -412,7 +412,7 @@ export default function BalancePage() {
                   <ChartZoom title="相手先名別 支出" normalHeight={260}>
                     {(h, zoomed) => (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart margin={zoomed ? { top: 30, right: 50, bottom: 20, left: 50 } : undefined}>
+                        <PieChart margin={zoomed ? { top: 55, right: 90, bottom: 40, left: 90 } : undefined}>
                           <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%"
                             cy={zoomed ? "50%" : "45%"}
                             outerRadius={zoomed ? "44%" : 90}
@@ -440,7 +440,7 @@ export default function BalancePage() {
                   <ChartZoom title="相手先ジャンル別 支出" normalHeight={260}>
                     {(h, zoomed) => (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart margin={zoomed ? { top: 30, right: 50, bottom: 20, left: 50 } : undefined}>
+                        <PieChart margin={zoomed ? { top: 55, right: 90, bottom: 40, left: 90 } : undefined}>
                           <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%"
                             cy={zoomed ? "50%" : "45%"}
                             outerRadius={zoomed ? "44%" : 90}
