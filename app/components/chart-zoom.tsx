@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 export function ChartZoom({
@@ -14,7 +14,6 @@ export function ChartZoom({
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const chartAreaRef = useRef<HTMLDivElement>(null);
   const [zoomedHeight, setZoomedHeight] = useState(0);
 
   useEffect(() => { setMounted(true); }, []);
@@ -31,13 +30,11 @@ export function ChartZoom({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !chartAreaRef.current) return;
-    const el = chartAreaRef.current;
-    const measure = () => setZoomedHeight(el.clientHeight);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => { ro.disconnect(); setZoomedHeight(0); };
+    if (!open) return;
+    const update = () => setZoomedHeight(window.innerHeight - 90);
+    update();
+    window.addEventListener("resize", update);
+    return () => { window.removeEventListener("resize", update); setZoomedHeight(0); };
   }, [open]);
 
   return (
@@ -93,7 +90,7 @@ export function ChartZoom({
               クリックまたは Esc で閉じる ✕
             </span>
           </div>
-          <div ref={chartAreaRef} style={{ flex: 1, minHeight: 0, width: "100%" }}>
+          <div style={{ flex: 1, minHeight: 0, width: "100%" }}>
             {zoomedHeight > 0 && children(zoomedHeight, true)}
           </div>
         </div>,
