@@ -9,7 +9,7 @@ export function ChartZoom({
 }: {
   title?: string;
   normalHeight?: number;
-  children: (height: number | string) => React.ReactNode;
+  children: (height: number | `${number}%`) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
