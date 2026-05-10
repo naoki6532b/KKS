@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function ChartZoom({
   title,
@@ -12,6 +12,16 @@ export function ChartZoom({
   children: (height: number | string) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Native capture-phase listener — fires before React/Recharts synthetic events
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const handler = () => setOpen(true);
+    el.addEventListener("click", handler, true);
+    return () => el.removeEventListener("click", handler, true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -27,7 +37,7 @@ export function ChartZoom({
   return (
     <>
       <div
-        onClickCapture={() => setOpen(true)}
+        ref={wrapperRef}
         style={{ cursor: "zoom-in", position: "relative" }}
         title="クリックで拡大"
       >
