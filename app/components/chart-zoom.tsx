@@ -27,7 +27,7 @@ export function ChartZoom({
   return (
     <>
       <div
-        onClick={() => setOpen(true)}
+        onClickCapture={() => setOpen(true)}
         style={{ cursor: "zoom-in", position: "relative" }}
         title="クリックで拡大"
       >
