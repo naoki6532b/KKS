@@ -5,7 +5,6 @@ import { nextMonthStart } from "@/lib/money";
 import { Header } from "@/app/components/header";
 import { DueList, type DueRow } from "@/app/components/due-list";
 import { SubscriptionSync } from "@/app/components/subscription-sync";
-import { BudgetBar } from "@/app/components/budget-bar";
 import { BudgetBarCanvasZoom } from "@/app/components/budget-bar-canvas-zoom";
 import { SALARY_ITEM_MAP } from "@/lib/salary";
 
@@ -138,8 +137,6 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
-
-        <BudgetBar expense={expenseTotal} budget={displayedBudget} />
 
         <BudgetBarCanvasZoom expense={expenseTotal} budget={displayedBudget} label="当月支出" />
 

@@ -8,7 +8,6 @@ import {
 } from "recharts";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/app/components/header";
-import { BudgetBar } from "@/app/components/budget-bar";
 import { SALARY_ITEM_MAP } from "@/lib/salary";
 import { ChartZoom } from "@/app/components/chart-zoom";
 import { BarChartCanvas } from "@/app/components/bar-chart-canvas";
@@ -252,11 +251,9 @@ export default function AnnualBalancePage() {
           </div>
         </div>
 
-        <BudgetBar expense={yearExpense} budget={budget} loading={loading} />
-
-        {!loading && budget > 0 && (
+        {!loading && (
           <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-header"><h2 className="card-title">予算消化状況（グラフ）</h2></div>
+            <div className="card-header"><h2 className="card-title">予算消化状況</h2></div>
             <div className="card-body" style={{ paddingTop: 8, paddingBottom: 8 }}>
               <ChartZoom title="予算消化状況" normalHeight={160}>
                 {(h, zoomed, w) => (
