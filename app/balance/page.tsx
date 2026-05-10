@@ -67,6 +67,20 @@ function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[
   return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderPieLabel({ cx, cy, midAngle, outerRadius, percent, name }: any) {
+  if (percent < 0.04) return null;
+  const RADIAN = Math.PI / 180;
+  const r = outerRadius + 30;
+  const x = cx + r * Math.cos(-midAngle * RADIAN);
+  const y = cy + r * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="#e2e8f0" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={12} fontWeight={600}>
+      {`${name} ${(percent * 100).toFixed(1)}%`}
+    </text>
+  );
+}
+
 function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
   if (!active || !payload?.length) return null;
   return (
@@ -396,14 +410,19 @@ export default function BalancePage() {
                   <p className="empty-state" style={{ fontSize:13 }}>相手先名のデータなし</p>
                 ) : (
                   <ChartZoom title="相手先名別 支出" normalHeight={260}>
-                    {(h) => (
+                    {(h, zoomed) => (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart>
-                          <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                        <PieChart margin={zoomed ? { top: 40, right: 80, bottom: 30, left: 80 } : undefined}>
+                          <Pie data={cpNamePie} dataKey="value" nameKey="name" cx="50%"
+                            cy={zoomed ? "50%" : "45%"}
+                            outerRadius={zoomed ? "36%" : 90}
+                            innerRadius={zoomed ? "18%" : 44}
+                            label={zoomed ? renderPieLabel : undefined}
+                            labelLine={zoomed ? { stroke: "#64748b" } : false}>
                             {cpNamePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
-                          <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                          <Legend iconSize={zoomed ? 12 : 10} wrapperStyle={{ fontSize: zoomed ? 13 : 11, color: zoomed ? "#cbd5e1" : undefined }} />
                         </PieChart>
                       </ResponsiveContainer>
                     )}
@@ -419,14 +438,19 @@ export default function BalancePage() {
                   <p className="empty-state" style={{ fontSize:13 }}>相手先ジャンルのデータなし</p>
                 ) : (
                   <ChartZoom title="相手先ジャンル別 支出" normalHeight={260}>
-                    {(h) => (
+                    {(h, zoomed) => (
                       <ResponsiveContainer width="100%" height={h}>
-                        <PieChart>
-                          <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={90} innerRadius={44}>
+                        <PieChart margin={zoomed ? { top: 40, right: 80, bottom: 30, left: 80 } : undefined}>
+                          <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%"
+                            cy={zoomed ? "50%" : "45%"}
+                            outerRadius={zoomed ? "36%" : 90}
+                            innerRadius={zoomed ? "18%" : 44}
+                            label={zoomed ? renderPieLabel : undefined}
+                            labelLine={zoomed ? { stroke: "#64748b" } : false}>
                             {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
-                          <Legend iconSize={10} wrapperStyle={{ fontSize:11 }} />
+                          <Legend iconSize={zoomed ? 12 : 10} wrapperStyle={{ fontSize: zoomed ? 13 : 11, color: zoomed ? "#cbd5e1" : undefined }} />
                         </PieChart>
                       </ResponsiveContainer>
                     )}
