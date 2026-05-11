@@ -64,6 +64,9 @@ export function SalaryForm({ mode, slipId }: Props) {
 
       const map: Record<string, ItemSetting> = {};
       for (const it of SALARY_ITEMS) map[it.key] = defaultSetting(it.key);
+      // Initialize aggregate settings so buildSlipTransactions can read them
+      map["__aggregate_payment__"]   = defaultSetting("__aggregate_payment__");
+      map["__aggregate_deduction__"] = defaultSetting("__aggregate_deduction__");
       for (const r of ((setRes.data ?? []) as ItemSetting[])) map[r.item_key] = { ...map[r.item_key], ...r };
       setSettings(map);
 
