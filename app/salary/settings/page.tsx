@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/app/components/header";
-import { SALARY_ITEMS, AGGREGATE_ITEMS, type ItemSetting, type LedgerMode, defaultSetting, type SalarySection } from "@/lib/salary";
+import { SALARY_ITEMS, AGGREGATE_ITEMS, type ItemSetting, type LedgerMode, defaultSetting, type SalarySection, buildSlipTransactions } from "@/lib/salary";
+import { firstDayOfMonth } from "@/lib/money";
 
 type CategoryRow     = { id: string; kind: "income"|"expense"; name: string };
 type CounterpartyRow = { id: string; kind: "income"|"expense"|"both"; name: string };
@@ -61,6 +62,8 @@ export default function SalarySettingsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
+
+      // 設定を保存
       const rows = Object.values(settings).map((s) => ({
         user_id: user.id,
         item_key: s.item_key,
@@ -72,7 +75,48 @@ export default function SalarySettingsPage() {
       }));
       const { error } = await supabase.from("salary_item_settings").upsert(rows, { onConflict: "user_id,item_key" });
       if (error) { setErr(error.message); return; }
-      setInfo("保存しました。");
+
+      // 既存の給与スリップの取引を新しい設定で再生成
+      const { data: taxData } = await supabase.from("user_settings").select("tax_rate").eq("user_id", user.id).maybeSingle();
+      const taxRate = taxData?.tax_rate != null ? Number(taxData.tax_rate) : 10;
+
+      const { data: slips } = await supabase.from("salary_slips").select("*").eq("user_id", user.id);
+      if (slips && slips.length > 0) {
+        for (const slip of slips as { id: string; slip_date: string; slip_type: string; account_id: string; memo: string | null }[]) {
+          const { data: items } = await supabase.from("salary_slip_items").select("*").eq("slip_id", slip.id);
+          const amounts: Record<string, number> = {};
+          for (const it of (items ?? []) as { item_key: string; amount: number }[]) amounts[it.item_key] = it.amount;
+
+          const slipTypeLabel = slip.slip_type === "salary" ? "給与" : "襲与";
+          const generated = buildSlipTransactions(amounts, settings, taxRate, slipTypeLabel);
+
+          await supabase.from("transactions").delete().eq("salary_slip_id", slip.id);
+          if (generated.length > 0) {
+            const txRows = generated.map((t) => ({
+              user_id: user.id,
+              tx_date: slip.slip_date,
+              target_month: firstDayOfMonth(slip.slip_date),
+              tx_type: t.tx_type,
+              amount: t.amount,
+              currency: "JPY",
+              category_id: t.category_id,
+              counterparty_id: t.counterparty_id,
+              counterparty_name: t.counterparty_name,
+              account_id: slip.account_id,
+              item_name: t.item_name,
+              memo: slip.memo ?? null,
+              has_tax: t.has_tax,
+              tax_amount: t.tax_amount,
+              salary_slip_id: slip.id,
+              salary_item_key: t.salary_item_key,
+            }));
+            await supabase.from("transactions").insert(txRows);
+          }
+        }
+        setInfo(`保存しました。既存の給与明細 ${slips.length} 件の出入金明細を更新しました。`);
+      } else {
+        setInfo("保存しました。");
+      }
     } catch { setErr("保存中にエラーが発生しました。"); }
     finally { setSaving(false); }
   }
