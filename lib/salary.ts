@@ -122,6 +122,10 @@ export function buildSlipTransactions(
   let aggPayment = 0;
   let aggDeduction = 0;
 
+  // 個別モードで科目未設定の場合のフォールバック用
+  const paymentDefault  = settings["__aggregate_payment__"];
+  const deductionDefault = settings["__aggregate_deduction__"];
+
   for (const it of SALARY_ITEMS) {
     const amount = Math.abs(amounts[it.key] ?? 0);
     if (amount <= 0) continue;
@@ -133,15 +137,22 @@ export function buildSlipTransactions(
       else           aggDeduction += amount;
       continue;
     }
-    const taxAmount = setting.has_tax ? Math.round(amount * taxRate / (100 + taxRate)) : 0;
+
+    // 個別モード：科目未設定の場合はデフォルト設定を使用
+    const fallback = isPayment ? paymentDefault : deductionDefault;
+    const catId  = setting.category_id  ?? fallback?.category_id  ?? null;
+    const cpId   = setting.counterparty_id  ?? fallback?.counterparty_id  ?? null;
+    const cpName = setting.counterparty_name ?? fallback?.counterparty_name ?? null;
+    const hasTax = setting.category_id ? setting.has_tax : (fallback?.has_tax ?? false);
+    const taxAmount = hasTax ? Math.round(amount * taxRate / (100 + taxRate)) : 0;
     out.push({
       tx_type: isPayment ? "income" : "expense",
       amount,
       item_name: it.label,
-      category_id: setting.category_id,
-      counterparty_id: setting.counterparty_id,
-      counterparty_name: setting.counterparty_name,
-      has_tax: setting.has_tax,
+      category_id: catId,
+      counterparty_id: cpId,
+      counterparty_name: cpName,
+      has_tax: hasTax,
       tax_amount: taxAmount,
       salary_item_key: it.key,
     });
