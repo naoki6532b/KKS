@@ -73,6 +73,11 @@ export function getItemsBySection(section: SalarySection): SalaryItemDef[] {
   return SALARY_ITEMS.filter((it) => it.section === section);
 }
 
+export const AGGREGATE_ITEMS: { key: string; label: string; isPayment: boolean }[] = [
+  { key: "__aggregate_payment__",   label: "支給合計", isPayment: true  },
+  { key: "__aggregate_deduction__", label: "控除合計", isPayment: false },
+];
+
 export type ItemSetting = {
   item_key: string;
   ledger_mode: LedgerMode;
@@ -145,28 +150,54 @@ export function buildSlipTransactions(
   }
 
   if (aggPayment > 0) {
+    // 支給合計の科目・相手先：合計モードの最初の支給項目の設定を使用
+    let aggCatId: string | null = null, aggCpId: string | null = null;
+    let aggCpName: string | null = null, aggHasTax = false;
+    for (const it of SALARY_ITEMS) {
+      if (it.section === "deduction") continue;
+      const s = settings[it.key];
+      if (!s || s.ledger_mode !== "aggregate") continue;
+      aggCatId   = s.category_id;
+      aggCpId    = s.counterparty_id;
+      aggCpName  = s.counterparty_name;
+      aggHasTax  = s.has_tax;
+      if (aggCatId) break;
+    }
     out.push({
       tx_type: "income",
       amount: aggPayment,
       item_name: `${slipTypeLabel}（支給合計）`,
-      category_id: null,
-      counterparty_id: null,
-      counterparty_name: null,
-      has_tax: false,
-      tax_amount: 0,
+      category_id: aggCatId,
+      counterparty_id: aggCpId,
+      counterparty_name: aggCpName,
+      has_tax: aggHasTax,
+      tax_amount: aggHasTax ? Math.round(aggPayment * taxRate / (100 + taxRate)) : 0,
       salary_item_key: "__aggregate_payment__",
     });
   }
   if (aggDeduction > 0) {
+    // 控除合計の科目・相手先：合計モードの最初の控除項目の設定を使用
+    let aggCatId: string | null = null, aggCpId: string | null = null;
+    let aggCpName: string | null = null, aggHasTax = false;
+    for (const it of SALARY_ITEMS) {
+      if (it.section !== "deduction") continue;
+      const s = settings[it.key];
+      if (!s || s.ledger_mode !== "aggregate") continue;
+      aggCatId   = s.category_id;
+      aggCpId    = s.counterparty_id;
+      aggCpName  = s.counterparty_name;
+      aggHasTax  = s.has_tax;
+      if (aggCatId) break;
+    }
     out.push({
       tx_type: "expense",
       amount: aggDeduction,
       item_name: `${slipTypeLabel}（控除合計）`,
-      category_id: null,
-      counterparty_id: null,
-      counterparty_name: null,
-      has_tax: false,
-      tax_amount: 0,
+      category_id: aggCatId,
+      counterparty_id: aggCpId,
+      counterparty_name: aggCpName,
+      has_tax: aggHasTax,
+      tax_amount: aggHasTax ? Math.round(aggDeduction * taxRate / (100 + taxRate)) : 0,
       salary_item_key: "__aggregate_deduction__",
     });
   }

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/app/components/header";
-import { SALARY_ITEMS, type ItemSetting, type LedgerMode, defaultSetting, type SalarySection } from "@/lib/salary";
+import { SALARY_ITEMS, type ItemSetting, type LedgerMode, defaultSetting, type SalarySection, buildSlipTransactions } from "@/lib/salary";
+import { firstDayOfMonth } from "@/lib/money";
 
 type CategoryRow     = { id: string; kind: "income"|"expense"; name: string };
 type CounterpartyRow = { id: string; kind: "income"|"expense"|"both"; name: string };
@@ -60,6 +61,7 @@ export default function SalarySettingsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
+
       const rows = Object.values(settings).map((s) => ({
         user_id: user.id,
         item_key: s.item_key,
@@ -71,7 +73,48 @@ export default function SalarySettingsPage() {
       }));
       const { error } = await supabase.from("salary_item_settings").upsert(rows, { onConflict: "user_id,item_key" });
       if (error) { setErr(error.message); return; }
-      setInfo("保存しました。");
+
+      // 既存の給与スリップの取引を新しい設定で再生成
+      const { data: taxData } = await supabase.from("user_settings").select("tax_rate").eq("user_id", user.id).maybeSingle();
+      const taxRate = taxData?.tax_rate != null ? Number(taxData.tax_rate) : 10;
+
+      const { data: slips } = await supabase.from("salary_slips").select("*").eq("user_id", user.id);
+      if (slips && slips.length > 0) {
+        for (const slip of slips as { id: string; slip_date: string; slip_type: string; account_id: string; memo: string | null }[]) {
+          const { data: items } = await supabase.from("salary_slip_items").select("*").eq("slip_id", slip.id);
+          const amounts: Record<string, number> = {};
+          for (const it of (items ?? []) as { item_key: string; amount: number }[]) amounts[it.item_key] = it.amount;
+
+          const slipTypeLabel = slip.slip_type === "salary" ? "給与" : "賞与";
+          const generated = buildSlipTransactions(amounts, settings, taxRate, slipTypeLabel);
+
+          await supabase.from("transactions").delete().eq("salary_slip_id", slip.id);
+          if (generated.length > 0) {
+            const txRows = generated.map((t) => ({
+              user_id: user.id,
+              tx_date: slip.slip_date,
+              target_month: firstDayOfMonth(slip.slip_date),
+              tx_type: t.tx_type,
+              amount: t.amount,
+              currency: "JPY",
+              category_id: t.category_id,
+              counterparty_id: t.counterparty_id,
+              counterparty_name: t.counterparty_name,
+              account_id: slip.account_id,
+              item_name: t.item_name,
+              memo: slip.memo ?? null,
+              has_tax: t.has_tax,
+              tax_amount: t.tax_amount,
+              salary_slip_id: slip.id,
+              salary_item_key: t.salary_item_key,
+            }));
+            await supabase.from("transactions").insert(txRows);
+          }
+        }
+        setInfo(`保存しました。既存の給与明細 ${slips.length} 件の出入金明細を更新しました。`);
+      } else {
+        setInfo("保存しました。");
+      }
     } catch { setErr("保存中にエラーが発生しました。"); }
     finally { setSaving(false); }
   }
@@ -82,14 +125,24 @@ export default function SalarySettingsPage() {
     const cats = categories.filter((c) => isPayment ? c.kind === "income" : c.kind === "expense");
     const cps  = counterparties.filter((c) => isPayment ? (c.kind === "income" || c.kind === "both") : (c.kind === "expense" || c.kind === "both"));
 
+    const hasAgg = items.some((it) => (settings[it.key] ?? defaultSetting(it.key)).ledger_mode === "aggregate");
+    const aggLabel = isPayment ? "支給合計" : "控除合計";
+
     return (
       <div key={section} className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <h2 className="card-title">{SECTION_LABEL[section]}</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>
-            「個別」を選ぶと出入金明細に項目別に登録、「合計」を選ぶと支給合計／控除合計にまとめて1件登録
+            「個別」→ 項目別に登録　／　「合計」→ {aggLabel}として1件登録
           </span>
         </div>
+        {hasAgg && (
+          <div style={{ padding: "8px 16px", background: "var(--sapphire-light, #eff6ff)", borderBottom: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 12, color: "var(--sapphire)", fontWeight: 600 }}>
+              ★ 「合計」モードの行に科目・相手先を設定すると、{aggLabel}の取引に反映されます（最初の設定が使われます）
+            </span>
+          </div>
+        )}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -107,8 +160,11 @@ export default function SalarySettingsPage() {
                 const s = settings[it.key] ?? defaultSetting(it.key);
                 const isAgg = s.ledger_mode === "aggregate";
                 return (
-                  <tr key={it.key}>
-                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{it.label}</td>
+                  <tr key={it.key} style={{ background: isAgg ? "var(--sapphire-light, #eff6ff)" : undefined, opacity: isAgg ? 0.9 : 1 }}>
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {it.label}
+                      {isAgg && <span style={{ marginLeft: 4, fontSize: 10, background: "var(--sapphire)", color: "white", borderRadius: 3, padding: "1px 4px" }}>合算</span>}
+                    </td>
                     <td>
                       <select
                         value={s.ledger_mode}
@@ -124,9 +180,8 @@ export default function SalarySettingsPage() {
                       <select
                         value={s.category_id ?? ""}
                         onChange={(e) => update(it.key, { category_id: e.target.value || null })}
-                        disabled={isAgg}
                         className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13, opacity: isAgg ? 0.4 : 1 }}
+                        style={{ padding: "6px 8px", fontSize: 13 }}
                       >
                         <option value="">未選択</option>
                         {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -136,9 +191,8 @@ export default function SalarySettingsPage() {
                       <select
                         value={s.counterparty_id ?? ""}
                         onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
-                        disabled={isAgg}
                         className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13, opacity: isAgg ? 0.4 : 1 }}
+                        style={{ padding: "6px 8px", fontSize: 13 }}
                       >
                         <option value="">未選択</option>
                         {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -149,10 +203,9 @@ export default function SalarySettingsPage() {
                         type="text"
                         value={s.counterparty_name ?? ""}
                         onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
-                        disabled={isAgg}
                         className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13, opacity: isAgg ? 0.4 : 1 }}
-                        placeholder="例: ○○健保"
+                        style={{ padding: "6px 8px", fontSize: 13 }}
+                        placeholder="例: ○○会社"
                       />
                     </td>
                     <td style={{ textAlign: "center" }}>
@@ -160,8 +213,7 @@ export default function SalarySettingsPage() {
                         type="checkbox"
                         checked={s.has_tax}
                         onChange={(e) => update(it.key, { has_tax: e.target.checked })}
-                        disabled={isAgg}
-                        style={{ width: 16, height: 16, opacity: isAgg ? 0.4 : 1, accentColor: "var(--sapphire-mid)" }}
+                        style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
                       />
                     </td>
                   </tr>
