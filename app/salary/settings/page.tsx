@@ -44,6 +44,8 @@ export default function SalarySettingsPage() {
       setCounterparties((cps ?? []) as CounterpartyRow[]);
       const map: Record<string, ItemSetting> = {};
       for (const it of SALARY_ITEMS) map[it.key] = defaultSetting(it.key);
+      map["__aggregate_payment__"]   = defaultSetting("__aggregate_payment__");
+      map["__aggregate_deduction__"] = defaultSetting("__aggregate_deduction__");
       for (const r of (rows ?? []) as ItemSetting[]) map[r.item_key] = { ...map[r.item_key], ...r };
       setSettings(map);
       setLoading(false);
@@ -74,7 +76,6 @@ export default function SalarySettingsPage() {
       const { error } = await supabase.from("salary_item_settings").upsert(rows, { onConflict: "user_id,item_key" });
       if (error) { setErr(error.message); return; }
 
-      // 既存の給与スリップの取引を新しい設定で再生成
       const { data: taxData } = await supabase.from("user_settings").select("tax_rate").eq("user_id", user.id).maybeSingle();
       const taxRate = taxData?.tax_rate != null ? Number(taxData.tax_rate) : 10;
 
@@ -119,30 +120,151 @@ export default function SalarySettingsPage() {
     finally { setSaving(false); }
   }
 
+  const hasPaymentAgg = SALARY_ITEMS
+    .filter((it) => it.section !== "deduction")
+    .some((it) => (settings[it.key] ?? defaultSetting(it.key)).ledger_mode === "aggregate");
+  const hasDeductionAgg = SALARY_ITEMS
+    .filter((it) => it.section === "deduction")
+    .some((it) => (settings[it.key] ?? defaultSetting(it.key)).ledger_mode === "aggregate");
+
+  const incomeCats  = categories.filter((c) => c.kind === "income");
+  const expenseCats = categories.filter((c) => c.kind === "expense");
+  const incomeCps   = counterparties.filter((c) => c.kind === "income" || c.kind === "both");
+  const expenseCps  = counterparties.filter((c) => c.kind === "expense" || c.kind === "both");
+
+  function renderAggregateSettings() {
+    if (!hasPaymentAgg && !hasDeductionAgg) return null;
+    return (
+      <div className="card" style={{ marginBottom: 20, borderLeft: "4px solid var(--sapphire, #3b82f6)" }}>
+        <div className="card-header">
+          <h2 className="card-title">合計登録時の設定</h2>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+            「合計」モードの項目をまとめて1件の取引として登録する際の科目・相手先
+          </span>
+        </div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ minWidth: 100 }}>区分</th>
+                <th style={{ minWidth: 140 }}>科目</th>
+                <th style={{ minWidth: 140 }}>相手先ジャンル</th>
+                <th style={{ minWidth: 140 }}>相手先名</th>
+                <th style={{ minWidth: 70, textAlign: "center" }}>税込み</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hasPaymentAgg && (
+                <tr>
+                  <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>支給合計</td>
+                  <td>
+                    <select
+                      value={settings["__aggregate_payment__"]?.category_id ?? ""}
+                      onChange={(e) => update("__aggregate_payment__", { category_id: e.target.value || null })}
+                      className="field-input"
+                      style={{ padding: "6px 8px", fontSize: 13 }}
+                    >
+                      <option value="">未選択</option>
+                      {incomeCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={settings["__aggregate_payment__"]?.counterparty_id ?? ""}
+                      onChange={(e) => update("__aggregate_payment__", { counterparty_id: e.target.value || null })}
+                      className="field-input"
+                      style={{ padding: "6px 8px", fontSize: 13 }}
+                    >
+                      <option value="">未選択</option>
+                      {incomeCps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={settings["__aggregate_payment__"]?.counterparty_name ?? ""}
+                      onChange={(e) => update("__aggregate_payment__", { counterparty_name: e.target.value || null })}
+                      className="field-input"
+                      style={{ padding: "6px 8px", fontSize: 13 }}
+                      placeholder="例: ○○会社"
+                    />
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={settings["__aggregate_payment__"]?.has_tax ?? false}
+                      onChange={(e) => update("__aggregate_payment__", { has_tax: e.target.checked })}
+                      style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
+                    />
+                  </td>
+                </tr>
+              )}
+              {hasDeductionAgg && (
+                <tr>
+                  <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>控除合計</td>
+                  <td>
+                    <select
+                      value={settings["__aggregate_deduction__"]?.category_id ?? ""}
+                      onChange={(e) => update("__aggregate_deduction__", { category_id: e.target.value || null })}
+                      className="field-input"
+                      style={{ padding: "6px 8px", fontSize: 13 }}
+                    >
+                      <option value="">未選択</option>
+                      {expenseCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={settings["__aggregate_deduction__"]?.counterparty_id ?? ""}
+                      onChange={(e) => update("__aggregate_deduction__", { counterparty_id: e.target.value || null })}
+                      className="field-input"
+                      style={{ padding: "6px 8px", fontSize: 13 }}
+                    >
+                      <option value="">未選択</option>
+                      {expenseCps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={settings["__aggregate_deduction__"]?.counterparty_name ?? ""}
+                      onChange={(e) => update("__aggregate_deduction__", { counterparty_name: e.target.value || null })}
+                      className="field-input"
+                      style={{ padding: "6px 8px", fontSize: 13 }}
+                      placeholder="例: ○○会社"
+                    />
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={settings["__aggregate_deduction__"]?.has_tax ?? false}
+                      onChange={(e) => update("__aggregate_deduction__", { has_tax: e.target.checked })}
+                      style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   function renderSection(section: SalarySection) {
     const items = SALARY_ITEMS.filter((it) => it.section === section);
     const isPayment = section !== "deduction";
-    const cats = categories.filter((c) => isPayment ? c.kind === "income" : c.kind === "expense");
-    const cps  = counterparties.filter((c) => isPayment ? (c.kind === "income" || c.kind === "both") : (c.kind === "expense" || c.kind === "both"));
-
-    const hasAgg = items.some((it) => (settings[it.key] ?? defaultSetting(it.key)).ledger_mode === "aggregate");
-    const aggLabel = isPayment ? "支給合計" : "控除合計";
+    const cats = isPayment ? incomeCats : expenseCats;
+    const cps  = isPayment ? incomeCps  : expenseCps;
 
     return (
       <div key={section} className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <h2 className="card-title">{SECTION_LABEL[section]}</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>
-            「個別」→ 項目別に登録　／　「合計」→ {aggLabel}として1件登録
+            「個別」→ 項目別に登録　／　「合計」→ {isPayment ? "支給合計" : "控除合計"}として1件登録
           </span>
         </div>
-        {hasAgg && (
-          <div style={{ padding: "8px 16px", background: "var(--sapphire-light, #eff6ff)", borderBottom: "1px solid var(--border)" }}>
-            <span style={{ fontSize: 12, color: "var(--sapphire)", fontWeight: 600 }}>
-              ★ 「合計」モードの行に科目・相手先を設定すると、{aggLabel}の取引に反映されます（最初の設定が使われます）
-            </span>
-          </div>
-        )}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -160,11 +282,8 @@ export default function SalarySettingsPage() {
                 const s = settings[it.key] ?? defaultSetting(it.key);
                 const isAgg = s.ledger_mode === "aggregate";
                 return (
-                  <tr key={it.key} style={{ background: isAgg ? "var(--sapphire-light, #eff6ff)" : undefined, opacity: isAgg ? 0.9 : 1 }}>
-                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                      {it.label}
-                      {isAgg && <span style={{ marginLeft: 4, fontSize: 10, background: "var(--sapphire)", color: "white", borderRadius: 3, padding: "1px 4px" }}>合算</span>}
-                    </td>
+                  <tr key={it.key} style={{ color: isAgg ? "var(--text-3)" : undefined }}>
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{it.label}</td>
                     <td>
                       <select
                         value={s.ledger_mode}
@@ -176,46 +295,54 @@ export default function SalarySettingsPage() {
                         <option value="aggregate">合計</option>
                       </select>
                     </td>
-                    <td>
-                      <select
-                        value={s.category_id ?? ""}
-                        onChange={(e) => update(it.key, { category_id: e.target.value || null })}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13 }}
-                      >
-                        <option value="">未選択</option>
-                        {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={s.counterparty_id ?? ""}
-                        onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13 }}
-                      >
-                        <option value="">未選択</option>
-                        {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={s.counterparty_name ?? ""}
-                        onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13 }}
-                        placeholder="例: ○○会社"
-                      />
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={s.has_tax}
-                        onChange={(e) => update(it.key, { has_tax: e.target.checked })}
-                        style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
-                      />
-                    </td>
+                    {isAgg ? (
+                      <td colSpan={4} style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
+                        上の「合計登録時の設定」で一括設定
+                      </td>
+                    ) : (
+                      <>
+                        <td>
+                          <select
+                            value={s.category_id ?? ""}
+                            onChange={(e) => update(it.key, { category_id: e.target.value || null })}
+                            className="field-input"
+                            style={{ padding: "6px 8px", fontSize: 13 }}
+                          >
+                            <option value="">未選択</option>
+                            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={s.counterparty_id ?? ""}
+                            onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
+                            className="field-input"
+                            style={{ padding: "6px 8px", fontSize: 13 }}
+                          >
+                            <option value="">未選択</option>
+                            {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={s.counterparty_name ?? ""}
+                            onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
+                            className="field-input"
+                            style={{ padding: "6px 8px", fontSize: 13 }}
+                            placeholder="例: ○○会社"
+                          />
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={s.has_tax}
+                            onChange={(e) => update(it.key, { has_tax: e.target.checked })}
+                            style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
+                          />
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -242,6 +369,7 @@ export default function SalarySettingsPage() {
           <div className="card"><p className="empty-state">読込中...</p></div>
         ) : (
           <>
+            {renderAggregateSettings()}
             {renderSection("payment_taxable")}
             {renderSection("payment_nontaxable")}
             {renderSection("deduction")}
