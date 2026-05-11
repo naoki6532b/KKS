@@ -10,6 +10,7 @@ import {
 } from "@/lib/salary";
 
 type AccountRow = { id: string; account_type: "cash"|"bank"|"card"; name: string; is_favorite: boolean };
+type SupabaseClient = ReturnType<typeof createClient>;
 
 type Props = {
   mode: "new" | "edit";
@@ -27,7 +28,10 @@ function todayYmd() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-async function fetchLatestSettings(supabase: ReturnType<typeof import("@/lib/supabase/client").createClient>, userId: string): Promise<{ settings: Record<string, ItemSetting>; taxRate: number }> {
+async function fetchLatestSettings(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ settings: Record<string, ItemSetting>; taxRate: number }> {
   const [setRes, taxRes] = await Promise.all([
     supabase.from("salary_item_settings").select("*").eq("user_id", userId),
     supabase.from("user_settings").select("tax_rate").eq("user_id", userId).maybeSingle(),
@@ -36,55 +40,54 @@ async function fetchLatestSettings(supabase: ReturnType<typeof import("@/lib/sup
   for (const it of SALARY_ITEMS) map[it.key] = defaultSetting(it.key);
   map["__aggregate_payment__"]   = defaultSetting("__aggregate_payment__");
   map["__aggregate_deduction__"] = defaultSetting("__aggregate_deduction__");
-  for (const r of ((setRes.data ?? []) as ItemSetting[])) map[r.item_key] = { ...map[r.item_key], ...r };
-  const taxRate = taxRes.data?.tax_rate != null ? Number(taxRes.data.tax_rate) : 10;
-  return { settings: map, taxRate };
+  for (const r of ((setRes.data ?? []) as ItemSetting[]))
+    map[r.item_key] = { ...map[r.item_key], ...r };
+  return {
+    settings: map,
+    taxRate: taxRes.data?.tax_rate != null ? Number(taxRes.data.tax_rate) : 10,
+  };
 }
 
 export function SalaryForm({ mode, slipId }: Props) {
-  const router  = useRouter();
-  const supabase = useMemo(() => import("@/lib/supabase/client").then(m => m.createClient()), []);
-  const supabaseClient = useMemo(() => {
-    const { createClient } = require("@/lib/supabase/client");
-    return createClient();
-  }, []);
+  const router   = useRouter();
+  const supabase = useMemo(() => createClient(), []);
 
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [err,     setErr]     = useState("");
+  const [err,      setErr]      = useState("");
 
-  const [slipDate, setSlipDate] = useState(todayYmd());
-  const [slipType, setSlipType] = useState<"salary"|"bonus">("salary");
-  const [accountId, setAccountId] = useState("");
-  const [memo, setMemo] = useState("");
+  const [slipDate,   setSlipDate]   = useState(todayYmd());
+  const [slipType,   setSlipType]   = useState<"salary"|"bonus">("salary");
+  const [accountId,  setAccountId]  = useState("");
+  const [memo,       setMemo]       = useState("");
 
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [settings, setSettings] = useState<Record<string, ItemSetting>>({});
   const [amounts,  setAmounts]  = useState<SlipItemAmounts>({});
-  const [taxRate,  setTaxRate]  = useState(10);
 
   useEffect(() => {
     let mounted = true;
     async function load() {
-      const { data: { user }, error } = await supabaseClient.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) { router.push("/login"); return; }
 
-      const accRes = await supabaseClient.from("accounts").select("id, account_type, name, is_favorite").eq("is_active", true);
+      const [accRes, { settings: map }] = await Promise.all([
+        supabase.from("accounts").select("id, account_type, name, is_favorite").eq("is_active", true),
+        fetchLatestSettings(supabase, user.id),
+      ]);
       if (!mounted) return;
 
-      const accs = ((accRes.data ?? []) as AccountRow[]).slice().sort((a, b) => (b.is_favorite?1:0)-(a.is_favorite?1:0) || a.name.localeCompare(b.name, "ja"));
+      const accs = ((accRes.data ?? []) as AccountRow[])
+        .slice()
+        .sort((a, b) => (b.is_favorite?1:0)-(a.is_favorite?1:0) || a.name.localeCompare(b.name, "ja"));
       setAccounts(accs);
-
-      const { settings: map, taxRate: tr } = await fetchLatestSettings(supabaseClient, user.id);
-      if (!mounted) return;
       setSettings(map);
-      setTaxRate(tr);
 
       if (mode === "edit" && slipId) {
         const [{ data: slip, error: slipErr }, { data: items }] = await Promise.all([
-          supabaseClient.from("salary_slips").select("*").eq("id", slipId).eq("user_id", user.id).single(),
-          supabaseClient.from("salary_slip_items").select("*").eq("slip_id", slipId),
+          supabase.from("salary_slips").select("*").eq("id", slipId).eq("user_id", user.id).single(),
+          supabase.from("salary_slip_items").select("*").eq("slip_id", slipId),
         ]);
         if (!mounted) return;
         if (slipErr || !slip) { setErr("給与明細が見つかりません。"); setLoading(false); return; }
@@ -101,7 +104,7 @@ export function SalaryForm({ mode, slipId }: Props) {
     }
     load();
     return () => { mounted = false; };
-  }, [router, supabaseClient, mode, slipId]);
+  }, [router, supabase, mode, slipId]);
 
   function setAmt(key: string, v: string) {
     const n = v === "" ? 0 : Math.round(Number(v));
@@ -117,64 +120,65 @@ export function SalaryForm({ mode, slipId }: Props) {
     e.preventDefault();
     setSaving(true); setErr("");
     try {
-      const { data: { user } } = await supabaseClient.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
-      if (!slipDate) { setErr("支給日を入力してください。"); return; }
+      if (!slipDate)   { setErr("支給日を入力してください。"); return; }
       if (!accountId) { setErr("振込先口座を選択してください。"); return; }
 
-      // 送信時に必ず最新設定を取得する
-      const { settings: latestSettings, taxRate: latestTaxRate } = await fetchLatestSettings(supabaseClient, user.id);
+      // 送信時に必ず最新設定を取得する（ページ読込後に設定を変更していても反映される）
+      const { settings: latestSettings, taxRate: latestTaxRate } =
+        await fetchLatestSettings(supabase, user.id);
 
       const slipTypeLabel = slipType === "salary" ? "給与" : "賞与";
       const generated = buildSlipTransactions(amounts, latestSettings, latestTaxRate, slipTypeLabel);
 
       let finalSlipId = slipId ?? "";
       if (mode === "new") {
-        const { data, error } = await supabaseClient.from("salary_slips").insert({
+        const { data, error } = await supabase.from("salary_slips").insert({
           user_id: user.id, slip_date: slipDate, slip_type: slipType,
           account_id: accountId, memo: memo.trim() || null,
         }).select("id").single();
         if (error || !data) { setErr(error?.message ?? "保存に失敗しました。"); return; }
         finalSlipId = data.id as string;
       } else {
-        const { error } = await supabaseClient.from("salary_slips").update({
+        const { error } = await supabase.from("salary_slips").update({
           slip_date: slipDate, slip_type: slipType,
           account_id: accountId, memo: memo.trim() || null,
           updated_at: new Date().toISOString(),
         }).eq("id", finalSlipId).eq("user_id", user.id);
         if (error) { setErr(error.message); return; }
-        await supabaseClient.from("salary_slip_items").delete().eq("slip_id", finalSlipId);
-        await supabaseClient.from("transactions").delete().eq("salary_slip_id", finalSlipId);
+        await supabase.from("salary_slip_items").delete().eq("slip_id", finalSlipId);
+        await supabase.from("transactions").delete().eq("salary_slip_id", finalSlipId);
       }
 
       const itemRows = SALARY_ITEMS
         .filter((it) => (amounts[it.key] ?? 0) !== 0)
         .map((it) => ({ slip_id: finalSlipId, item_key: it.key, amount: amounts[it.key] }));
       if (itemRows.length > 0) {
-        const { error } = await supabaseClient.from("salary_slip_items").insert(itemRows);
+        const { error } = await supabase.from("salary_slip_items").insert(itemRows);
         if (error) { setErr(error.message); return; }
       }
 
-      const txRows = generated.map((t) => ({
-        user_id: user.id,
-        tx_date: slipDate,
-        target_month: firstDayOfMonth(slipDate),
-        tx_type: t.tx_type,
-        amount: t.amount,
-        currency: "JPY",
-        category_id: t.category_id,
-        counterparty_id: t.counterparty_id,
-        counterparty_name: t.counterparty_name,
-        account_id: accountId,
-        item_name: t.item_name,
-        memo: memo.trim() || null,
-        has_tax: t.has_tax,
-        tax_amount: t.tax_amount,
-        salary_slip_id: finalSlipId,
-        salary_item_key: t.salary_item_key,
-      }));
-      if (txRows.length > 0) {
-        const { error } = await supabaseClient.from("transactions").insert(txRows);
+      if (generated.length > 0) {
+        const txRows = generated.map((t) => ({
+          user_id: user.id,
+          tx_date: slipDate,
+          target_month: firstDayOfMonth(slipDate),
+          tx_type: t.tx_type,
+          amount: t.amount,
+          currency: "JPY",
+          category_id: t.category_id,
+          counterparty_id: t.counterparty_id,
+          counterparty_name: t.counterparty_name,
+          account_id: accountId,
+          item_name: t.item_name,
+          memo: memo.trim() || null,
+          has_tax: t.has_tax,
+          tax_amount: t.tax_amount,
+          salary_slip_id: finalSlipId,
+          salary_item_key: t.salary_item_key,
+        }));
+        const { error } = await supabase.from("transactions").insert(txRows);
         if (error) { setErr(error.message); return; }
       }
       router.push("/salary");
@@ -191,10 +195,10 @@ export function SalaryForm({ mode, slipId }: Props) {
     if (!confirm("この給与明細と関連する出入金明細をすべて削除します。よろしいですか？")) return;
     setDeleting(true); setErr("");
     try {
-      const { data: { user } } = await supabaseClient.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
-      await supabaseClient.from("transactions").delete().eq("salary_slip_id", slipId);
-      const { error } = await supabaseClient.from("salary_slips").delete().eq("id", slipId).eq("user_id", user.id);
+      await supabase.from("transactions").delete().eq("salary_slip_id", slipId);
+      const { error } = await supabase.from("salary_slips").delete().eq("id", slipId).eq("user_id", user.id);
       if (error) { setErr(error.message); return; }
       router.push("/salary");
       router.refresh();
@@ -218,12 +222,12 @@ export function SalaryForm({ mode, slipId }: Props) {
         <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
           {items.map((it) => {
             const v = amounts[it.key] ?? 0;
-            const mode = (settings[it.key] ?? defaultSetting(it.key)).ledger_mode;
+            const displayMode = (settings[it.key] ?? defaultSetting(it.key)).ledger_mode;
             return (
               <label key={it.key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 4 }}>
                   {it.label}
-                  {mode === "aggregate" && (
+                  {displayMode === "aggregate" && (
                     <span style={{ fontSize: 9, background: "var(--surface-2)", color: "var(--text-3)", padding: "1px 4px", borderRadius: 3 }}>合算</span>
                   )}
                 </span>
