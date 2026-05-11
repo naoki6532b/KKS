@@ -13,7 +13,15 @@ type SlipWithItems = {
   salary_slip_items: { item_key: string; amount: number }[];
 };
 
-function slipToSyntheticRow(slip: SlipWithItems): TxRow {
+type AggSetting = {
+  category_id: string | null;
+  counterparty_id: string | null;
+  counterparty_name: string | null;
+  categories: { name?: string } | null;
+  counterparties: { name?: string } | null;
+};
+
+function slipToSyntheticRow(slip: SlipWithItems, aggPayment: AggSetting | null): TxRow {
   let payment = 0, deduction = 0;
   for (const it of slip.salary_slip_items) {
     const def = SALARY_ITEM_MAP.get(it.item_key);
@@ -33,13 +41,13 @@ function slipToSyntheticRow(slip: SlipWithItems): TxRow {
     currency_amount: null,
     exchange_rate: null,
     item_name: `${typeLabel}（${m}月分）`,
-    counterparty_name: null,
+    counterparty_name: aggPayment?.counterparty_name ?? null,
     memo: null,
     has_tax: false,
     tax_amount: null,
     salary_slip_id: slip.id,
-    categories: null,
-    counterparties: null,
+    categories: aggPayment?.categories ?? null,
+    counterparties: aggPayment?.counterparties ?? null,
     accounts: slip.accounts,
   };
 }
@@ -72,12 +80,41 @@ export default async function TransactionsPage() {
   if (!strictDisplay) {
     const nonSalaryRows = displayRows.filter((r) => !r.salary_slip_id);
 
-    const { data: slips } = await supabase
-      .from("salary_slips")
-      .select("id, slip_date, slip_type, accounts(name), salary_slip_items(item_key, amount)")
-      .order("slip_date", { ascending: true });
+    const [{ data: slips }, { data: aggRaw }] = await Promise.all([
+      supabase
+        .from("salary_slips")
+        .select("id, slip_date, slip_type, accounts(name), salary_slip_items(item_key, amount)")
+        .order("slip_date", { ascending: true }),
+      supabase
+        .from("salary_item_settings")
+        .select("category_id, counterparty_id, counterparty_name")
+        .eq("user_id", user.id)
+        .eq("item_key", "__aggregate_payment__")
+        .maybeSingle(),
+    ]);
 
-    const syntheticRows: TxRow[] = ((slips ?? []) as unknown as SlipWithItems[]).map(slipToSyntheticRow);
+    let aggPayment: AggSetting | null = null;
+    if (aggRaw) {
+      const [catRes, cpRes] = await Promise.all([
+        aggRaw.category_id
+          ? supabase.from("categories").select("name").eq("id", aggRaw.category_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        aggRaw.counterparty_id
+          ? supabase.from("counterparties").select("name").eq("id", aggRaw.counterparty_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      aggPayment = {
+        category_id: aggRaw.category_id,
+        counterparty_id: aggRaw.counterparty_id,
+        counterparty_name: aggRaw.counterparty_name,
+        categories: catRes.data ? { name: (catRes.data as { name?: string }).name } : null,
+        counterparties: cpRes.data ? { name: (cpRes.data as { name?: string }).name } : null,
+      };
+    }
+
+    const syntheticRows: TxRow[] = ((slips ?? []) as unknown as SlipWithItems[]).map((slip) =>
+      slipToSyntheticRow(slip, aggPayment)
+    );
 
     displayRows = [...nonSalaryRows, ...syntheticRows].sort((a, b) =>
       a.tx_date.localeCompare(b.tx_date)
