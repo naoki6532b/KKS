@@ -123,11 +123,11 @@ export default function SalarySettingsPage() {
 
   function renderAggregateSection() {
     return (
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-header">
-          <h2 className="card-title">合計登録時の設定</h2>
-          <span style={{ fontSize: 12, color: "var(--text-3)" }}>
-            「合計」を選んだ項目をまとめて1件登録する際の科目・相手先を設定します
+      <div className="card" style={{ marginBottom: 20, border: "2px solid var(--sapphire, #3b82f6)" }}>
+        <div className="card-header" style={{ background: "var(--sapphire-light, #eff6ff)" }}>
+          <h2 className="card-title" style={{ color: "var(--sapphire)" }}>合計登録時の設定（必須）</h2>
+          <span style={{ fontSize: 12, color: "var(--sapphire)" }}>
+            登録方法を「合計」にした項目はここで設定した科目・相手先が取引一覧に反映されます
           </span>
         </div>
         <div className="table-wrap">
@@ -230,8 +230,8 @@ export default function SalarySettingsPage() {
                 const s = settings[it.key] ?? defaultSetting(it.key);
                 const isAgg = s.ledger_mode === "aggregate";
                 return (
-                  <tr key={it.key}>
-                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{it.label}</td>
+                  <tr key={it.key} style={{ background: isAgg ? "var(--surface-2, #f8fafc)" : undefined }}>
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap", color: isAgg ? "var(--text-3)" : undefined }}>{it.label}</td>
                     <td>
                       <select
                         value={s.ledger_mode}
@@ -243,50 +243,54 @@ export default function SalarySettingsPage() {
                         <option value="aggregate">合計</option>
                       </select>
                     </td>
-                    <td>
-                      <select
-                        value={s.category_id ?? ""}
-                        onChange={(e) => update(it.key, { category_id: e.target.value || null })}
-                        disabled={isAgg}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13, opacity: isAgg ? 0.4 : 1 }}
-                      >
-                        <option value="">未選択</option>
-                        {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={s.counterparty_id ?? ""}
-                        onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
-                        disabled={isAgg}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13, opacity: isAgg ? 0.4 : 1 }}
-                      >
-                        <option value="">未選択</option>
-                        {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={s.counterparty_name ?? ""}
-                        onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
-                        disabled={isAgg}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13, opacity: isAgg ? 0.4 : 1 }}
-                        placeholder="例: ○○健保"
-                      />
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={s.has_tax}
-                        onChange={(e) => update(it.key, { has_tax: e.target.checked })}
-                        disabled={isAgg}
-                        style={{ width: 16, height: 16, opacity: isAgg ? 0.4 : 1, accentColor: "var(--sapphire-mid)" }}
-                      />
-                    </td>
+                    {isAgg ? (
+                      <td colSpan={4} style={{ color: "var(--text-3)", fontSize: 12, fontStyle: "italic" }}>
+                        ↑ ページ上部の「合計登録時の設定」で科目・相手先を設定してください
+                      </td>
+                    ) : (
+                      <>
+                        <td>
+                          <select
+                            value={s.category_id ?? ""}
+                            onChange={(e) => update(it.key, { category_id: e.target.value || null })}
+                            className="field-input"
+                            style={{ padding: "6px 8px", fontSize: 13 }}
+                          >
+                            <option value="">未選択</option>
+                            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={s.counterparty_id ?? ""}
+                            onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
+                            className="field-input"
+                            style={{ padding: "6px 8px", fontSize: 13 }}
+                          >
+                            <option value="">未選択</option>
+                            {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={s.counterparty_name ?? ""}
+                            onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
+                            className="field-input"
+                            style={{ padding: "6px 8px", fontSize: 13 }}
+                            placeholder="例: ○○健保"
+                          />
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={s.has_tax}
+                            onChange={(e) => update(it.key, { has_tax: e.target.checked })}
+                            style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
+                          />
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
