@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Header } from "@/app/components/header";
-import { SALARY_ITEMS, AGGREGATE_ITEMS, type ItemSetting, type LedgerMode, defaultSetting, type SalarySection, buildSlipTransactions } from "@/lib/salary";
+import { SALARY_ITEMS, type ItemSetting, type LedgerMode, defaultSetting, type SalarySection, buildSlipTransactions } from "@/lib/salary";
 import { firstDayOfMonth } from "@/lib/money";
 
 type CategoryRow     = { id: string; kind: "income"|"expense"; name: string };
@@ -43,8 +43,7 @@ export default function SalarySettingsPage() {
       setCategories((cats ?? []) as CategoryRow[]);
       setCounterparties((cps ?? []) as CounterpartyRow[]);
       const map: Record<string, ItemSetting> = {};
-      for (const it of SALARY_ITEMS)    map[it.key] = defaultSetting(it.key);
-      for (const it of AGGREGATE_ITEMS) map[it.key] = defaultSetting(it.key);
+      for (const it of SALARY_ITEMS) map[it.key] = defaultSetting(it.key);
       for (const r of (rows ?? []) as ItemSetting[]) map[r.item_key] = { ...map[r.item_key], ...r };
       setSettings(map);
       setLoading(false);
@@ -63,7 +62,6 @@ export default function SalarySettingsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
 
-      // 設定を保存
       const rows = Object.values(settings).map((s) => ({
         user_id: user.id,
         item_key: s.item_key,
@@ -87,7 +85,7 @@ export default function SalarySettingsPage() {
           const amounts: Record<string, number> = {};
           for (const it of (items ?? []) as { item_key: string; amount: number }[]) amounts[it.item_key] = it.amount;
 
-          const slipTypeLabel = slip.slip_type === "salary" ? "給与" : "襲与";
+          const slipTypeLabel = slip.slip_type === "salary" ? "給与" : "賞与";
           const generated = buildSlipTransactions(amounts, settings, taxRate, slipTypeLabel);
 
           await supabase.from("transactions").delete().eq("salary_slip_id", slip.id);
@@ -121,98 +119,30 @@ export default function SalarySettingsPage() {
     finally { setSaving(false); }
   }
 
-  function renderAggregateSection() {
-    return (
-      <div className="card" style={{ marginBottom: 20, border: "2px solid var(--sapphire, #3b82f6)" }}>
-        <div className="card-header" style={{ background: "var(--sapphire-light, #eff6ff)" }}>
-          <h2 className="card-title" style={{ color: "var(--sapphire)" }}>合計登録時の設定（必須）</h2>
-          <span style={{ fontSize: 12, color: "var(--sapphire)" }}>
-            登録方法を「合計」にした項目はここで設定した科目・相手先が取引一覧に反映されます
-          </span>
-        </div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ minWidth: 130 }}>合計区分</th>
-                <th style={{ minWidth: 140 }}>科目</th>
-                <th style={{ minWidth: 140 }}>相手先ジャンル</th>
-                <th style={{ minWidth: 140 }}>相手先名</th>
-                <th style={{ minWidth: 70, textAlign: "center" }}>税込み</th>
-              </tr>
-            </thead>
-            <tbody>
-              {AGGREGATE_ITEMS.map(({ key, label, isPayment }) => {
-                const s = settings[key] ?? defaultSetting(key);
-                const cats = categories.filter((c) => isPayment ? c.kind === "income" : c.kind === "expense");
-                const cps  = counterparties.filter((c) => isPayment ? (c.kind === "income" || c.kind === "both") : (c.kind === "expense" || c.kind === "both"));
-                return (
-                  <tr key={key}>
-                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{label}</td>
-                    <td>
-                      <select
-                        value={s.category_id ?? ""}
-                        onChange={(e) => update(key, { category_id: e.target.value || null })}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13 }}
-                      >
-                        <option value="">未選択</option>
-                        {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        value={s.counterparty_id ?? ""}
-                        onChange={(e) => update(key, { counterparty_id: e.target.value || null })}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13 }}
-                      >
-                        <option value="">未選択</option>
-                        {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={s.counterparty_name ?? ""}
-                        onChange={(e) => update(key, { counterparty_name: e.target.value || null })}
-                        className="field-input"
-                        style={{ padding: "6px 8px", fontSize: 13 }}
-                        placeholder="例: ○○会社"
-                      />
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={s.has_tax}
-                        onChange={(e) => update(key, { has_tax: e.target.checked })}
-                        style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
   function renderSection(section: SalarySection) {
     const items = SALARY_ITEMS.filter((it) => it.section === section);
     const isPayment = section !== "deduction";
     const cats = categories.filter((c) => isPayment ? c.kind === "income" : c.kind === "expense");
     const cps  = counterparties.filter((c) => isPayment ? (c.kind === "income" || c.kind === "both") : (c.kind === "expense" || c.kind === "both"));
 
+    const hasAgg = items.some((it) => (settings[it.key] ?? defaultSetting(it.key)).ledger_mode === "aggregate");
+    const aggLabel = isPayment ? "支給合計" : "控除合計";
+
     return (
       <div key={section} className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <h2 className="card-title">{SECTION_LABEL[section]}</h2>
           <span style={{ fontSize: 12, color: "var(--text-3)" }}>
-            「個別」を選ぶと出入金明細に項目別に登録、「合計」を選ぶと支給合計／控除合計にまとめて1件登録
+            「個別」→ 項目別に登録　／　「合計」→ {aggLabel}として1件登録
           </span>
         </div>
+        {hasAgg && (
+          <div style={{ padding: "8px 16px", background: "var(--sapphire-light, #eff6ff)", borderBottom: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 12, color: "var(--sapphire)", fontWeight: 600 }}>
+              ★ 「合計」モードの行に科目・相手先を設定すると、{aggLabel}の取引に反映されます（最初の設定が使われます）
+            </span>
+          </div>
+        )}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -230,8 +160,11 @@ export default function SalarySettingsPage() {
                 const s = settings[it.key] ?? defaultSetting(it.key);
                 const isAgg = s.ledger_mode === "aggregate";
                 return (
-                  <tr key={it.key} style={{ background: isAgg ? "var(--surface-2, #f8fafc)" : undefined }}>
-                    <td style={{ fontWeight: 600, whiteSpace: "nowrap", color: isAgg ? "var(--text-3)" : undefined }}>{it.label}</td>
+                  <tr key={it.key} style={{ background: isAgg ? "var(--sapphire-light, #eff6ff)" : undefined, opacity: isAgg ? 0.9 : 1 }}>
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {it.label}
+                      {isAgg && <span style={{ marginLeft: 4, fontSize: 10, background: "var(--sapphire)", color: "white", borderRadius: 3, padding: "1px 4px" }}>合算</span>}
+                    </td>
                     <td>
                       <select
                         value={s.ledger_mode}
@@ -243,54 +176,46 @@ export default function SalarySettingsPage() {
                         <option value="aggregate">合計</option>
                       </select>
                     </td>
-                    {isAgg ? (
-                      <td colSpan={4} style={{ color: "var(--text-3)", fontSize: 12, fontStyle: "italic" }}>
-                        ↑ ページ上部の「合計登録時の設定」で科目・相手先を設定してください
-                      </td>
-                    ) : (
-                      <>
-                        <td>
-                          <select
-                            value={s.category_id ?? ""}
-                            onChange={(e) => update(it.key, { category_id: e.target.value || null })}
-                            className="field-input"
-                            style={{ padding: "6px 8px", fontSize: 13 }}
-                          >
-                            <option value="">未選択</option>
-                            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </td>
-                        <td>
-                          <select
-                            value={s.counterparty_id ?? ""}
-                            onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
-                            className="field-input"
-                            style={{ padding: "6px 8px", fontSize: 13 }}
-                          >
-                            <option value="">未選択</option>
-                            {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={s.counterparty_name ?? ""}
-                            onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
-                            className="field-input"
-                            style={{ padding: "6px 8px", fontSize: 13 }}
-                            placeholder="例: ○○健保"
-                          />
-                        </td>
-                        <td style={{ textAlign: "center" }}>
-                          <input
-                            type="checkbox"
-                            checked={s.has_tax}
-                            onChange={(e) => update(it.key, { has_tax: e.target.checked })}
-                            style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
-                          />
-                        </td>
-                      </>
-                    )}
+                    <td>
+                      <select
+                        value={s.category_id ?? ""}
+                        onChange={(e) => update(it.key, { category_id: e.target.value || null })}
+                        className="field-input"
+                        style={{ padding: "6px 8px", fontSize: 13 }}
+                      >
+                        <option value="">未選択</option>
+                        {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        value={s.counterparty_id ?? ""}
+                        onChange={(e) => update(it.key, { counterparty_id: e.target.value || null })}
+                        className="field-input"
+                        style={{ padding: "6px 8px", fontSize: 13 }}
+                      >
+                        <option value="">未選択</option>
+                        {cps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={s.counterparty_name ?? ""}
+                        onChange={(e) => update(it.key, { counterparty_name: e.target.value || null })}
+                        className="field-input"
+                        style={{ padding: "6px 8px", fontSize: 13 }}
+                        placeholder="例: ○○会社"
+                      />
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={s.has_tax}
+                        onChange={(e) => update(it.key, { has_tax: e.target.checked })}
+                        style={{ width: 16, height: 16, accentColor: "var(--sapphire-mid)" }}
+                      />
+                    </td>
                   </tr>
                 );
               })}
@@ -317,7 +242,6 @@ export default function SalarySettingsPage() {
           <div className="card"><p className="empty-state">読込中...</p></div>
         ) : (
           <>
-            {renderAggregateSection()}
             {renderSection("payment_taxable")}
             {renderSection("payment_nontaxable")}
             {renderSection("deduction")}
