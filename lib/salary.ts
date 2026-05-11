@@ -73,6 +73,11 @@ export function getItemsBySection(section: SalarySection): SalaryItemDef[] {
   return SALARY_ITEMS.filter((it) => it.section === section);
 }
 
+export const AGGREGATE_ITEMS: { key: string; label: string; isPayment: boolean }[] = [
+  { key: "__aggregate_payment__",   label: "支給合計", isPayment: true  },
+  { key: "__aggregate_deduction__", label: "控除合計", isPayment: false },
+];
+
 export type ItemSetting = {
   item_key: string;
   ledger_mode: LedgerMode;
@@ -145,28 +150,30 @@ export function buildSlipTransactions(
   }
 
   if (aggPayment > 0) {
+    const aggSetting = settings["__aggregate_payment__"] ?? defaultSetting("__aggregate_payment__");
     out.push({
       tx_type: "income",
       amount: aggPayment,
       item_name: `${slipTypeLabel}（支給合計）`,
-      category_id: null,
-      counterparty_id: null,
-      counterparty_name: null,
-      has_tax: false,
-      tax_amount: 0,
+      category_id: aggSetting.category_id,
+      counterparty_id: aggSetting.counterparty_id,
+      counterparty_name: aggSetting.counterparty_name,
+      has_tax: aggSetting.has_tax,
+      tax_amount: aggSetting.has_tax ? Math.round(aggPayment * taxRate / (100 + taxRate)) : 0,
       salary_item_key: "__aggregate_payment__",
     });
   }
   if (aggDeduction > 0) {
+    const aggSetting = settings["__aggregate_deduction__"] ?? defaultSetting("__aggregate_deduction__");
     out.push({
       tx_type: "expense",
       amount: aggDeduction,
       item_name: `${slipTypeLabel}（控除合計）`,
-      category_id: null,
-      counterparty_id: null,
-      counterparty_name: null,
-      has_tax: false,
-      tax_amount: 0,
+      category_id: aggSetting.category_id,
+      counterparty_id: aggSetting.counterparty_id,
+      counterparty_name: aggSetting.counterparty_name,
+      has_tax: aggSetting.has_tax,
+      tax_amount: aggSetting.has_tax ? Math.round(aggDeduction * taxRate / (100 + taxRate)) : 0,
       salary_item_key: "__aggregate_deduction__",
     });
   }
