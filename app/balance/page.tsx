@@ -227,10 +227,10 @@ export default function BalancePage() {
         setMonthExpense(expense);
         setBudget(adjustedBudget);
         setTotalData(buildTotalData(cur, monthStart));
-        // 円グラフは実トランザクション(rawCur)で集計する。非表示モードでも給与控除を支出として反映するため。
-        setCpNamePie(buildCpNamePie(rawCur));
-        setCpGenrePie(buildCpGenrePie(rawCur, cpMap));
-        setCatPie(buildCategoryPie(rawCur, catMap));
+        // 円グラフは cur で集計（給与・賞与の控除は表示モードON時のみ反映）。
+        setCpNamePie(buildCpNamePie(cur));
+        setCpGenrePie(buildCpGenrePie(cur, cpMap));
+        setCatPie(buildCategoryPie(cur, catMap));
       } catch (err) {
         console.error("[balance] loadData error:", err);
       } finally {
