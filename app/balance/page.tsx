@@ -61,6 +61,16 @@ function buildCpGenrePie(txRows: TxRow[], cpMap: Map<string, string>): PieSlice[
   return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
 }
 
+function buildCategoryPie(txRows: TxRow[], catMap: Map<string, string>): PieSlice[] {
+  const map = new Map<string, number>();
+  for (const tx of txRows) {
+    if (tx.tx_type !== "expense" || tx.amount <= 0) continue;
+    const key = tx.category_id ? (catMap.get(tx.category_id) ?? "未設定") : "未設定";
+    map.set(key, (map.get(key) ?? 0) + tx.amount);
+  }
+  return Array.from(map.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderPieLabel({ cx, cy, midAngle, outerRadius, percent, name }: any) {
   if (percent < 0.04) return null;
@@ -129,6 +139,7 @@ export default function BalancePage() {
   const [totalData, setTotalData]   = useState<DayBase[]>([]);
   const [cpNamePie, setCpNamePie]   = useState<PieSlice[]>([]);
   const [cpGenrePie, setCpGenrePie] = useState<PieSlice[]>([]);
+  const [catPie, setCatPie]         = useState<PieSlice[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -146,6 +157,7 @@ export default function BalancePage() {
           { data: curRows },
           { data: budgetRow, error: budgetError },
           { data: cpRows },
+          { data: catRows },
           { data: userSettings },
           { data: slipsRaw },
         ] = await Promise.all([
@@ -153,6 +165,7 @@ export default function BalancePage() {
           supabase.from("transactions").select("tx_date, tx_type, amount, category_id, counterparty_id, counterparty_name, has_tax, tax_amount, salary_slip_id").gte("tx_date", monthStart).lt("tx_date", monthEnd),
           supabase.from("monthly_budgets").select("budget_amount").eq("target_month", monthStart).maybeSingle(),
           supabase.from("counterparties").select("id, name").eq("is_active", true),
+          supabase.from("categories").select("id, name").eq("is_active", true),
           supabase.from("user_settings").select("strict_display").eq("user_id", user.id).maybeSingle(),
           supabase.from("salary_slips").select("id, slip_date, salary_slip_items(item_key, amount)").gte("slip_date", monthStart).lt("slip_date", monthEnd),
         ]);
@@ -204,6 +217,7 @@ export default function BalancePage() {
         const income  = cur.filter(t => t.tx_type === "income").reduce((s, t) => s + t.amount, 0);
         const expense = cur.filter(t => t.tx_type === "expense").reduce((s, t) => s + t.amount, 0);
         const cpMap   = new Map<string, string>((cpRows ?? []).map((c: CpMeta) => [c.id, c.name]));
+        const catMap  = new Map<string, string>((catRows ?? []).map((c: CpMeta) => [c.id, c.name]));
 
         const rawBudget      = budgetRow?.budget_amount ?? 0;
         const adjustedBudget = strictDisplay ? rawBudget + totalDeductions : rawBudget;
@@ -216,6 +230,7 @@ export default function BalancePage() {
         // 円グラフは実トランザクション(rawCur)で集計する。非表示モードでも給与控除を支出として反映するため。
         setCpNamePie(buildCpNamePie(rawCur));
         setCpGenrePie(buildCpGenrePie(rawCur, cpMap));
+        setCatPie(buildCategoryPie(rawCur, catMap));
       } catch (err) {
         console.error("[balance] loadData error:", err);
       } finally {
@@ -301,8 +316,8 @@ export default function BalancePage() {
           </div>
         )}
 
-        {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0) && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
+        {!loading && (cpNamePie.length > 0 || cpGenrePie.length > 0 || catPie.length > 0) && (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:16, marginBottom:20 }}>
             <div className="card">
               <div className="card-header"><h2 className="card-title">相手先名別 支出</h2></div>
               <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
@@ -360,6 +375,40 @@ export default function BalancePage() {
                           <Pie data={cpGenrePie} dataKey="value" nameKey="name" cx="50%" cy="45%"
                             outerRadius={90} innerRadius={44} labelLine={false}>
                             {cpGenrePie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip content={<PieTooltip />} />
+                          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartZoom>
+                )}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header"><h2 className="card-title">科目別 支出</h2></div>
+              <div className="card-body" style={{ paddingTop:8, paddingBottom:8 }}>
+                {catPie.length === 0 ? (
+                  <p className="empty-state" style={{ fontSize:13 }}>科目のデータなし</p>
+                ) : (
+                  <ChartZoom title="科目別 支出" normalHeight={260}>
+                    {(h, zoomed, w) => w ? (
+                      <PieChart width={w} height={h as number} margin={{ top: 45, right: 70, bottom: 35, left: 70 }}>
+                        <Pie data={catPie} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                          outerRadius="60%" innerRadius="30%"
+                          label={renderPieLabel} labelLine={{ stroke: "#64748b" }}>
+                          {catPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip content={<PieTooltip />} />
+                        <Legend iconSize={12} wrapperStyle={{ fontSize: 13, color: "#cbd5e1" }} />
+                      </PieChart>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={h}>
+                        <PieChart>
+                          <Pie data={catPie} dataKey="value" nameKey="name" cx="50%" cy="45%"
+                            outerRadius={90} innerRadius={44} labelLine={false}>
+                            {catPie.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip content={<PieTooltip />} />
                           <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
