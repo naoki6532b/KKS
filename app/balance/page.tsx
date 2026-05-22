@@ -213,8 +213,9 @@ export default function BalancePage() {
         setMonthExpense(expense);
         setBudget(adjustedBudget);
         setTotalData(buildTotalData(cur, monthStart));
-        setCpNamePie(buildCpNamePie(cur));
-        setCpGenrePie(buildCpGenrePie(cur, cpMap));
+        // 円グラフは実トランザクション(rawCur)で集計する。非表示モードでも給与控除を支出として反映するため。
+        setCpNamePie(buildCpNamePie(rawCur));
+        setCpGenrePie(buildCpGenrePie(rawCur, cpMap));
       } catch (err) {
         console.error("[balance] loadData error:", err);
       } finally {
