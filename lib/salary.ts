@@ -50,6 +50,7 @@ export const SALARY_ITEMS: SalaryItemDef[] = [
   { key: "pension",              label: "厚生年金",        section: "deduction" },
   { key: "employment_insurance", label: "雇用保険",        section: "deduction" },
   { key: "care_insurance",       label: "介護保険",        section: "deduction" },
+  { key: "childcare_support",    label: "子育て支援金",    section: "deduction" },
   { key: "income_tax",           label: "所得税",          section: "deduction" },
   { key: "resident_tax",         label: "住民税",          section: "deduction" },
   { key: "corporate_pension",    label: "企業年金",        section: "deduction" },
