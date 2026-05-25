@@ -40,7 +40,7 @@ export function ComboInput({ value, onChange, suggestions, placeholder, classNam
       {open && filtered.length > 0 && (
         <ul style={{
           position: "absolute", zIndex: 200, top: "calc(100% + 2px)", left: 0, right: 0,
-          background: "var(--surface)", border: "1px solid var(--border-strong)",
+          background: "var(--surface-1)", border: "1px solid var(--border)",
           borderRadius: "var(--r)", boxShadow: "0 4px 20px rgba(13,43,94,0.14)",
           listStyle: "none", margin: 0, padding: "4px 0",
           maxHeight: 220, overflowY: "auto",
@@ -49,7 +49,7 @@ export function ComboInput({ value, onChange, suggestions, placeholder, classNam
             <li
               key={s}
               onMouseDown={(e) => { e.preventDefault(); onChange(s); setOpen(false); }}
-              style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "var(--text)", transition: "background 0.1s" }}
+              style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "var(--text-1)", transition: "background 0.1s" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--sapphire-light)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "")}
             >
