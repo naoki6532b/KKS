@@ -89,7 +89,7 @@ export default function SalarySettingsPage() {
           const slipTypeLabel = slip.slip_type === "salary" ? "給与" : "賞与";
           const generated = buildSlipTransactions(amounts, settings, taxRate, slipTypeLabel);
 
-          await supabase.from("transactions").delete().eq("salary_slip_id", slip.id);
+          await supabase.from("transactions").delete().eq("salary_slip_id", slip.id).eq("user_id", user.id);
           if (generated.length > 0) {
             const txRows = generated.map((t) => ({
               user_id: user.id,

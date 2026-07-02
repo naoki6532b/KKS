@@ -78,7 +78,7 @@ export default function MastersPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); router.refresh(); return; }
       const payload = { user_id: user.id, kind: categoryForm.kind, name, sort_order: sortOrder, is_active: categoryForm.is_active, is_favorite: categoryForm.is_favorite };
-      const result = categoryForm.id ? await supabase.from("categories").update(payload).eq("id", categoryForm.id) : await supabase.from("categories").insert(payload);
+      const result = categoryForm.id ? await supabase.from("categories").update(payload).eq("id", categoryForm.id).eq("user_id", user.id) : await supabase.from("categories").insert(payload);
       if (result.error) { setErrorMessage(result.error.message); return; }
       setInfoMessage(categoryForm.id ? "科目を更新しました。" : "科目を追加しました。");
       resetCategoryForm(); await loadData();
@@ -94,7 +94,7 @@ export default function MastersPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); router.refresh(); return; }
       const payload = { user_id: user.id, kind: counterpartyForm.kind, name, sort_order: sortOrder, is_active: counterpartyForm.is_active, is_favorite: counterpartyForm.is_favorite, default_category_id: counterpartyForm.kind === "both" ? null : counterpartyForm.default_category_id || null };
-      const result = counterpartyForm.id ? await supabase.from("counterparties").update(payload).eq("id", counterpartyForm.id) : await supabase.from("counterparties").insert(payload);
+      const result = counterpartyForm.id ? await supabase.from("counterparties").update(payload).eq("id", counterpartyForm.id).eq("user_id", user.id) : await supabase.from("counterparties").insert(payload);
       if (result.error) { setErrorMessage(result.error.message); return; }
       setInfoMessage(counterpartyForm.id ? "相手先を更新しました。" : "相手先を追加しました。");
       resetCounterpartyForm(); await loadData();
@@ -118,7 +118,7 @@ export default function MastersPage() {
       if (!user) { router.push("/login"); router.refresh(); return; }
       const isCard = accountForm.account_type === "card";
       const payload = { user_id: user.id, name, account_type: accountForm.account_type, sort_order: sortOrder, is_active: accountForm.is_active, is_favorite: accountForm.is_favorite, close_day_type: isCard ? accountForm.close_day_type : null, close_day: isCard ? closeDay : null, pay_month_offset: isCard ? payMonthOffset : null, pay_day_type: isCard ? accountForm.pay_day_type : null, pay_day: isCard ? payDay : null };
-      const result = accountForm.id ? await supabase.from("accounts").update(payload).eq("id", accountForm.id) : await supabase.from("accounts").insert(payload);
+      const result = accountForm.id ? await supabase.from("accounts").update(payload).eq("id", accountForm.id).eq("user_id", user.id) : await supabase.from("accounts").insert(payload);
       if (result.error) { setErrorMessage(result.error.message); return; }
       setInfoMessage(accountForm.id ? "支払方法を更新しました。" : "支払方法を追加しました。");
       resetAccountForm(); await loadData();
@@ -127,7 +127,9 @@ export default function MastersPage() {
 
   async function toggleCategoryActive(row: CategoryRow) {
     setErrorMessage(""); setInfoMessage("");
-    const result = await supabase.from("categories").update({ is_active: !row.is_active }).eq("id", row.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); router.refresh(); return; }
+    const result = await supabase.from("categories").update({ is_active: !row.is_active }).eq("id", row.id).eq("user_id", user.id);
     if (result.error) { setErrorMessage(result.error.message); return; }
     setInfoMessage(row.is_active ? "科目を使用停止にしました。" : "科目を再度有効化しました。");
     await loadData();
@@ -135,7 +137,9 @@ export default function MastersPage() {
 
   async function toggleCounterpartyActive(row: CounterpartyRow) {
     setErrorMessage(""); setInfoMessage("");
-    const result = await supabase.from("counterparties").update({ is_active: !row.is_active }).eq("id", row.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); router.refresh(); return; }
+    const result = await supabase.from("counterparties").update({ is_active: !row.is_active }).eq("id", row.id).eq("user_id", user.id);
     if (result.error) { setErrorMessage(result.error.message); return; }
     setInfoMessage(row.is_active ? "相手先を使用停止にしました。" : "相手先を再度有効化しました。");
     await loadData();
@@ -143,7 +147,9 @@ export default function MastersPage() {
 
   async function toggleAccountActive(row: AccountRow) {
     setErrorMessage(""); setInfoMessage("");
-    const result = await supabase.from("accounts").update({ is_active: !row.is_active }).eq("id", row.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/login"); router.refresh(); return; }
+    const result = await supabase.from("accounts").update({ is_active: !row.is_active }).eq("id", row.id).eq("user_id", user.id);
     if (result.error) { setErrorMessage(result.error.message); return; }
     setInfoMessage(row.is_active ? "支払方法を使用停止にしました。" : "支払方法を再度有効化しました。");
     await loadData();

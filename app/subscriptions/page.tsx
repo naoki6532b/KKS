@@ -180,14 +180,18 @@ export default function SubscriptionsPage() {
   }
 
   async function handleToggleActive(sub: SubRow) {
-    const { error } = await supabase.from("subscriptions").update({ is_active: !sub.is_active }).eq("id", sub.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setErrorMsg("ログインが必要です。"); return; }
+    const { error } = await supabase.from("subscriptions").update({ is_active: !sub.is_active }).eq("id", sub.id).eq("user_id", user.id);
     if (error) { setErrorMsg(error.message); return; }
     await loadAll();
   }
 
   async function handleDelete(sub: SubRow) {
     if (!confirm(`「${sub.name}」を削除しますか？`)) return;
-    const { error } = await supabase.from("subscriptions").delete().eq("id", sub.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setErrorMsg("ログインが必要です。"); return; }
+    const { error } = await supabase.from("subscriptions").delete().eq("id", sub.id).eq("user_id", user.id);
     if (error) { setErrorMsg(error.message); return; }
     await loadAll();
   }

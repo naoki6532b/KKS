@@ -141,14 +141,15 @@ export function SalaryForm({ mode, slipId }: Props) {
         if (error || !data) { setErr(error?.message ?? "保存に失敗しました。"); return; }
         finalSlipId = data.id as string;
       } else {
-        const { error } = await supabase.from("salary_slips").update({
+        const { data: updated, error } = await supabase.from("salary_slips").update({
           slip_date: slipDate, slip_type: slipType,
           account_id: accountId, memo: memo.trim() || null,
           updated_at: new Date().toISOString(),
-        }).eq("id", finalSlipId).eq("user_id", user.id);
+        }).eq("id", finalSlipId).eq("user_id", user.id).select("id");
         if (error) { setErr(error.message); return; }
+        if (!updated || updated.length === 0) { setErr("給与明細が見つかりません。"); return; }
         await supabase.from("salary_slip_items").delete().eq("slip_id", finalSlipId);
-        await supabase.from("transactions").delete().eq("salary_slip_id", finalSlipId);
+        await supabase.from("transactions").delete().eq("salary_slip_id", finalSlipId).eq("user_id", user.id);
       }
 
       const itemRows = SALARY_ITEMS
@@ -197,7 +198,7 @@ export function SalaryForm({ mode, slipId }: Props) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
-      await supabase.from("transactions").delete().eq("salary_slip_id", slipId);
+      await supabase.from("transactions").delete().eq("salary_slip_id", slipId).eq("user_id", user.id);
       const { error } = await supabase.from("salary_slips").delete().eq("id", slipId).eq("user_id", user.id);
       if (error) { setErr(error.message); return; }
       router.push("/salary");

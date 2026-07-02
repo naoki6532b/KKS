@@ -47,6 +47,7 @@ export function SubscriptionSync() {
           const { data: existing } = await supabase
             .from("transactions")
             .select("id")
+            .eq("user_id", user.id)
             .eq("subscription_id", sub.id)
             .eq("tx_date", billingDate)
             .maybeSingle();
@@ -90,7 +91,8 @@ export function SubscriptionSync() {
         await supabase
           .from("subscriptions")
           .update({ next_billing_date: billingDate })
-          .eq("id", sub.id);
+          .eq("id", sub.id)
+          .eq("user_id", user.id);
       }
     }
 
