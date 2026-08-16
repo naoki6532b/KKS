@@ -1,12 +1,27 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { nextMonthStart } from "@/lib/money";
+import { computeCardDueDate, nextMonthStart, type AccountRule } from "@/lib/money";
 import { Header } from "@/app/components/header";
 import { DueList, type DueRow } from "@/app/components/due-list";
 import { SubscriptionSync } from "@/app/components/subscription-sync";
 import { BudgetBarCanvasZoom } from "@/app/components/budget-bar-canvas-zoom";
 import { SALARY_ITEM_MAP } from "@/lib/salary";
+
+type CardAccount = AccountRule & {
+  id: string;
+  name: string;
+};
+
+type DueTransaction = Omit<DueRow, "card_due_date" | "accounts">;
+
+function shiftMonthStart(monthStart: string, delta: number): string {
+  const [year, month] = monthStart.split("-").map(Number);
+  const total = year * 12 + month - 1 + delta;
+  const shiftedYear = Math.floor(total / 12);
+  const shiftedMonth = (total % 12) + 1;
+  return `${shiftedYear}-${String(shiftedMonth).padStart(2, "0")}-01`;
+}
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -22,7 +37,30 @@ export default async function HomePage() {
   const monthEnd = nextMonthStart(monthStart);
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data: budgetRow }, { data: txRows }, { data: dueRows }, { data: userSettings }, { data: slipsThisMonth }] = await Promise.all([
+  const { data: cardAccountsRaw } = await supabase
+    .from("accounts")
+    .select("id, name, account_type, close_day_type, close_day, pay_month_offset, pay_day_type, pay_day")
+    .eq("account_type", "card");
+
+  const cardAccounts = (cardAccountsRaw ?? []) as CardAccount[];
+  const accountById = new Map(cardAccounts.map((account) => [account.id, account]));
+  const maxPayMonthOffset = cardAccounts.reduce(
+    (max, account) => Math.max(max, account.pay_month_offset ?? 0),
+    0
+  );
+  // 締め日をまたぐと請求月が1か月先になるため、その分も遡って取得する。
+  const earliestCardTxDate = shiftMonthStart(monthStart, -(maxPayMonthOffset + 1));
+
+  const dueRowsQuery = cardAccounts.length > 0
+    ? supabase
+        .from("transactions")
+        .select("id, tx_date, amount, account_id, item_name, counterparties(name)")
+        .eq("tx_type", "expense")
+        .in("account_id", cardAccounts.map((account) => account.id))
+        .gte("tx_date", earliestCardTxDate)
+    : Promise.resolve({ data: [] });
+
+  const [{ data: budgetRow }, { data: txRows }, { data: dueTransactionsRaw }, { data: userSettings }, { data: slipsThisMonth }] = await Promise.all([
     supabase
       .from("monthly_budgets")
       .select("budget_amount")
@@ -35,13 +73,7 @@ export default async function HomePage() {
       .gte("tx_date", monthStart)
       .lt("tx_date", monthEnd),
 
-    supabase
-      .from("transactions")
-      .select("id, tx_date, amount, card_due_date, account_id, item_name, counterparties(name), accounts(name)")
-      .not("card_due_date", "is", null)
-      .gte("card_due_date", today)
-      .order("card_due_date", { ascending: true })
-      .order("account_id", { ascending: true }),
+    dueRowsQuery,
 
     supabase
       .from("user_settings")
@@ -90,6 +122,24 @@ export default async function HomePage() {
     expenseTotal = nonSalaryExpense;
     displayedBudget = budget;
   }
+
+  const dueRows: DueRow[] = ((dueTransactionsRaw ?? []) as DueTransaction[])
+    .flatMap((transaction) => {
+      const account = accountById.get(transaction.account_id);
+      if (!account) return [];
+      const cardDueDate = computeCardDueDate(transaction.tx_date, account);
+      if (!cardDueDate || cardDueDate < today) return [];
+      return [{
+        ...transaction,
+        card_due_date: cardDueDate,
+        accounts: { name: account.name },
+      }];
+    })
+    .sort((a, b) =>
+      a.card_due_date.localeCompare(b.card_due_date) ||
+      a.account_id.localeCompare(b.account_id) ||
+      a.tx_date.localeCompare(b.tx_date)
+    );
 
   const remaining = displayedBudget - expenseTotal;
 
@@ -145,10 +195,11 @@ export default async function HomePage() {
             <h2 className="card-title">今後のカード引落予定</h2>
           </div>
           <div className="card-body">
-            <DueList rows={(dueRows ?? []) as DueRow[]} />
+            <DueList rows={dueRows} />
           </div>
         </div>
       </main>
     </>
   );
 }
+
