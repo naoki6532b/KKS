@@ -11,6 +11,7 @@ import { ComboInput } from "@/app/components/combo-input";
 type CategoryRow     = { id: string; kind: "income"|"expense"; name: string; is_favorite: boolean; sort_order: number };
 type CounterpartyRow = { id: string; kind: "income"|"expense"|"both"; name: string; is_favorite: boolean; sort_order: number; default_category_id: string|null };
 type AccountRow      = { id: string; account_type: "cash"|"bank"|"card"; name: string; is_favorite: boolean; sort_order: number; close_day_type: "fixed"|"month_end"|null; close_day: number|null; pay_month_offset: number|null; pay_day_type: "fixed"|"month_end"|null; pay_day: number|null };
+type CounterpartyNameHistoryRow = { counterparty_id: string | null; counterparty_name: string | null };
 
 function compareRows<T extends { is_favorite?: boolean; sort_order?: number; name?: string }>(a: T, b: T) {
   const af = a.is_favorite ? 1 : 0, bf = b.is_favorite ? 1 : 0;
@@ -34,7 +35,7 @@ export default function EditTransactionPage() {
   const [categories, setCategories]         = useState<CategoryRow[]>([]);
   const [counterparties, setCounterparties] = useState<CounterpartyRow[]>([]);
   const [accounts, setAccounts]             = useState<AccountRow[]>([]);
-  const [pastCpNames, setPastCpNames]       = useState<string[]>([]);
+  const [pastCpNames, setPastCpNames]       = useState<CounterpartyNameHistoryRow[]>([]);
 
   const [txDate, setTxDate]                   = useState("");
   const [txType, setTxType]                   = useState<"income"|"expense">("expense");
@@ -64,7 +65,7 @@ export default function EditTransactionPage() {
         supabase.from("categories").select("id, kind, name, is_favorite, sort_order").eq("is_active", true),
         supabase.from("counterparties").select("id, kind, name, is_favorite, sort_order, default_category_id").eq("is_active", true),
         supabase.from("accounts").select("id, account_type, name, is_favorite, sort_order, close_day_type, close_day, pay_month_offset, pay_day_type, pay_day").eq("is_active", true),
-        supabase.from("transactions").select("counterparty_name").not("counterparty_name", "is", null).eq("user_id", user.id),
+        supabase.from("transactions").select("counterparty_id, counterparty_name").not("counterparty_name", "is", null).eq("user_id", user.id),
         supabase.from("user_settings").select("tax_rate").eq("user_id", user.id).maybeSingle(),
       ]);
       if (!mounted) return;
@@ -89,7 +90,7 @@ export default function EditTransactionPage() {
       setCategories([...(catData ?? [])].sort(compareRows) as CategoryRow[]);
       setCounterparties([...(cpData ?? [])].sort(compareRows) as CounterpartyRow[]);
       setAccounts([...(accData ?? [])].sort(compareRows) as AccountRow[]);
-      setPastCpNames([...new Set((nameData ?? []).map((r: { counterparty_name: string | null }) => r.counterparty_name).filter(Boolean))] as string[]);
+      setPastCpNames((nameData ?? []) as CounterpartyNameHistoryRow[]);
       if (settingsData?.tax_rate != null) setTaxRate(Number(settingsData.tax_rate));
       setLoading(false);
     }
@@ -173,6 +174,15 @@ export default function EditTransactionPage() {
 
   const filteredCategories     = categories.filter((x) => x.kind === txType);
   const filteredCounterparties = counterparties.filter((x) => x.kind === txType || x.kind === "both");
+  const counterpartyNameSuggestions = useMemo(() => {
+    if (!counterpartyId) return [];
+    return [...new Set(
+      pastCpNames
+        .filter((row) => row.counterparty_id === counterpartyId)
+        .map((row) => row.counterparty_name)
+        .filter((name): name is string => Boolean(name))
+    )];
+  }, [counterpartyId, pastCpNames]);
   const currencyInfo = CURRENCIES.find((c) => c.code === currency);
 
   return (
@@ -247,7 +257,7 @@ export default function EditTransactionPage() {
 
               <div className="field">
                 <label className="field-label">相手先名 <span style={{ fontWeight:400, color:"var(--text-4)", fontSize:11 }}>（任意）</span></label>
-                <ComboInput value={counterpartyName} onChange={setCounterpartyName} suggestions={pastCpNames} placeholder="例: イオン、東京電力" className="field-input" />
+                <ComboInput value={counterpartyName} onChange={setCounterpartyName} suggestions={counterpartyNameSuggestions} placeholder="例: イオン、東京電力" className="field-input" />
               </div>
 
               <div className="field">
@@ -291,3 +301,4 @@ export default function EditTransactionPage() {
     </>
   );
 }
+
